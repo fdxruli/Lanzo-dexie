@@ -3,6 +3,7 @@ import { generalRepository } from './general';
 import { productsRepository } from './products';
 import { salesRepository } from './sales';
 import { DatabaseError, DB_ERROR_CODES } from './utils';
+import { fixStockInconsistencies, rebuildDailyStats } from '../maintenance';
 
 // ============================================================
 // EXPORTACIÓN DE CONSTANTES Y CLASES (Compatibilidad 100%)
@@ -298,4 +299,10 @@ export const streamAllDataToJSONL = async (onChunk) => {
             offset += CHUNK_SIZE;
         }
     }
+
+};
+
+export const maintenanceTools = {
+    fixStock: fixStockInconsistencies,
+    rebuildStats: rebuildDailyStats
 };

@@ -8,9 +8,17 @@ import { handleDexieError, DatabaseError, DB_ERROR_CODES } from './utils';
 export const salesRepository = {
 
     /**
+     * 🔥 VERSIÓN OPTIMIZADA CON RECALCULACIÓN INTELIGENTE
+     * 
      * Ejecuta una venta de forma Transaccional y Atómica.
      * Actualiza stocks (Lotes y Productos Padre), guarda la venta y genera log.
-     * * @param {object} sale - Objeto de venta completo.
+     * 
+     * MEJORAS:
+     * - Pre-carga lotes en memoria (1 query por producto)
+     * - Recalcula stock del padre sumando lotes (autocorrección)
+     * - Evita doble deducción
+     * 
+     * @param {object} sale - Objeto de venta completo.
      * @param {Array} deductions - Array de { batchId, quantity, productId }.
      */
     async executeSaleTransaction(sale, deductions) {
@@ -26,87 +34,162 @@ export const salesRepository = {
                 // 1. Verificación de Idempotencia (Evitar duplicados)
                 const existingSale = await db.table(STORES.SALES).get(sale.id);
                 if (existingSale) {
-                    // Lanzamos error controlado que abortará la transacción
-                    throw new DatabaseError(DB_ERROR_CODES.CONSTRAINT_VIOLATION, 'La venta ya fue procesada anteriormente.');
+                    throw new DatabaseError(
+                        DB_ERROR_CODES.CONSTRAINT_VIOLATION, 
+                        'La venta ya fue procesada anteriormente.'
+                    );
                 }
 
-                // 2. Pre-validación y Agrupación de Stocks
-                // Mapa para acumular cuánto restar al producto PADRE (Global)
-                const parentUpdates = new Map();
+                // ============================================================
+                // 2. PRE-CARGA INTELIGENTE DE LOTES (OPTIMIZACIÓN CLAVE)
+                // ============================================================
+                // Identificamos qué productos necesitamos recalcular
+                const affectedProductIds = new Set();
 
-                // A. Procesar Deducciones por LOTE (Variantes/Lotes específicos)
-                for (const { batchId, quantity, productId } of deductions) {
-                    if (quantity <= 0) continue;
+                // A. Productos con deducciones de lotes
+                deductions.forEach(({ productId }) => {
+                    if (productId) affectedProductIds.add(productId);
+                });
 
-                    // Obtener Lote en tiempo real (dentro de la transacción)
-                    const batch = await db.table(STORES.PRODUCT_BATCHES).get(batchId);
-
-                    if (!batch) {
-                        throw new Error(`Integridad Crítica: El lote ${batchId} no existe.`);
-                    }
-
-                    // Validación de Stock (Atomic Check)
-                    if (batch.stock < quantity) {
-                        throw new Error(`STOCK_INSUFFICIENT: Lote ${batch.sku || batchId} tiene ${batch.stock}, se requiere ${quantity}`);
-                    }
-
-                    // Actualizar Lote
-                    const newStock = batch.stock - quantity;
-                    const updates = {
-                        stock: newStock,
-                        isActive: newStock > 0.0001 // Desactivar si llega a 0
-                    };
-
-                    await db.table(STORES.PRODUCT_BATCHES).update(batchId, updates);
-
-                    // Acumular para el padre
-                    const currentParentQty = parentUpdates.get(productId) || 0;
-                    parentUpdates.set(productId, currentParentQty + quantity);
-                }
-
-                // B. Procesar Items SIN Lote (Productos simples que descuentan directo del padre)
+                // B. Productos vendidos directamente (sin lotes)
                 if (sale.items && Array.isArray(sale.items)) {
                     sale.items.forEach(item => {
-                        // Si el item NO usó lotes (es un producto simple), lo sumamos al descuento padre
                         if (!item.batchesUsed || item.batchesUsed.length === 0) {
                             const pid = item.parentId || item.id;
-                            if (item.quantity > 0) {
-                                const current = parentUpdates.get(pid) || 0;
-                                parentUpdates.set(pid, current + item.quantity);
-                            }
+                            if (pid) affectedProductIds.add(pid);
                         }
                     });
                 }
 
-                // 3. Actualizar Productos Padre (Consolidado)
-                for (const [productId, qtyToRemove] of parentUpdates) {
+                // C. CACHEO: Una sola query por producto (muy rápido)
+                const batchesCacheMap = new Map();
+                
+                await Promise.all(
+                    Array.from(affectedProductIds).map(async (productId) => {
+                        const batches = await db.table(STORES.PRODUCT_BATCHES)
+                            .where('productId').equals(productId)
+                            .toArray(); // Traemos TODOS (activos e inactivos)
+                        
+                        batchesCacheMap.set(productId, batches);
+                    })
+                );
+
+                // ============================================================
+                // 3. VALIDACIÓN Y DESCUENTO DE LOTES
+                // ============================================================
+                // Mapa temporal para trackear cambios en memoria
+                const batchUpdates = new Map();
+
+                for (const { batchId, quantity, productId } of deductions) {
+                    if (quantity <= 0) continue;
+
+                    // Obtener lote del caché (ya lo tenemos en RAM)
+                    const productBatches = batchesCacheMap.get(productId) || [];
+                    let batch = productBatches.find(b => b.id === batchId);
+
+                    // Si no está en caché, lo buscamos en BD (caso raro)
+                    if (!batch) {
+                        batch = await db.table(STORES.PRODUCT_BATCHES).get(batchId);
+                    }
+
+                    if (!batch) {
+                        throw new Error(
+                            `Integridad Crítica: El lote ${batchId} no existe.`
+                        );
+                    }
+
+                    // Validación de Stock (Atomic Check)
+                    if (batch.stock < quantity) {
+                        throw new Error(
+                            `STOCK_INSUFFICIENT: Lote ${batch.sku || batchId} tiene ${batch.stock}, se requiere ${quantity}`
+                        );
+                    }
+
+                    // Actualizar en memoria primero
+                    const newStock = batch.stock - quantity;
+                    const updatedBatch = {
+                        ...batch,
+                        stock: newStock,
+                        isActive: newStock > 0.0001
+                    };
+
+                    // Guardar cambio en el mapa temporal
+                    batchUpdates.set(batchId, updatedBatch);
+
+                    // Actualizar también el caché para el recálculo posterior
+                    const batchIndex = productBatches.findIndex(b => b.id === batchId);
+                    if (batchIndex >= 0) {
+                        productBatches[batchIndex] = updatedBatch;
+                    }
+
+                    // Persistir en BD
+                    await db.table(STORES.PRODUCT_BATCHES).put(updatedBatch);
+                }
+
+                // ============================================================
+                // 4. RECALCULACIÓN INTELIGENTE DEL STOCK PADRE
+                // ============================================================
+                // Ahora que los lotes están actualizados, recalculamos el padre
+                
+                for (const productId of affectedProductIds) {
                     const product = await db.table(STORES.MENU).get(productId);
+                    
+                    if (!product) continue; // Producto eliminado (caso extremo)
 
-                    if (product && product.trackStock) {
-                        let newStock = product.stock - qtyToRemove;
+                    // Solo recalculamos si trackea stock
+                    if (product.trackStock) {
+                        
+                        // OPCIÓN A: Si el producto USA LOTES
+                        if (product.batchManagement?.enabled) {
+                            // Suma de lotes activos (ya actualizados en el caché)
+                            const productBatches = batchesCacheMap.get(productId) || [];
+                            
+                            const totalStock = productBatches
+                                .filter(b => {
+                                    const stockVal = Number(b.stock);
+                                    return b.isActive && !isNaN(stockVal) && stockVal > 0.0001;
+                                })
+                                .reduce((sum, b) => sum + Number(b.stock), 0);
 
-                        // --- MEJORA OPCIONAL: BLOQUEO ESTRICTO ---
-                        // if (newStock < 0) {
-                        //    throw new DatabaseError(DB_ERROR_CODES.CONSTRAINT_VIOLATION, `Stock insuficiente para producto: ${product.name}`);
-                        // }
-                        // -----------------------------------------
+                            // Actualizar padre con el stock REAL calculado
+                            await db.table(STORES.MENU).update(productId, {
+                                stock: totalStock,
+                                updatedAt: new Date().toISOString()
+                            });
+                        } 
+                        // OPCIÓN B: Si el producto NO USA LOTES (descuento directo)
+                        else {
+                            // Calculamos cuánto se vendió de este producto
+                            let totalSold = 0;
+                            
+                            sale.items.forEach(item => {
+                                const itemProductId = item.parentId || item.id;
+                                if (itemProductId === productId) {
+                                    totalSold += item.quantity || 0;
+                                }
+                            });
 
-                        if (newStock < 0) newStock = 0; // Tu lógica actual (permisiva)
+                            if (totalSold > 0) {
+                                let newStock = product.stock - totalSold;
+                                if (newStock < 0) newStock = 0; // Protección
 
-                        await db.table(STORES.MENU).update(productId, {
-                            stock: newStock,
-                            updatedAt: new Date().toISOString()
-                        });
+                                await db.table(STORES.MENU).update(productId, {
+                                    stock: newStock,
+                                    updatedAt: new Date().toISOString()
+                                });
+                            }
+                        }
                     }
                 }
 
-                // 4. Guardar la Venta
-                // Dexie valida la clave primaria (id) automáticamente
+                // ============================================================
+                // 5. GUARDAR LA VENTA
+                // ============================================================
                 await db.table(STORES.SALES).add(sale);
 
-                // 5. Registrar Log de Transacción (Para auditoría)
-                // Al estar dentro de la transacción, si algo falla arriba, este log NUNCA se escribe.
-                // Esto reemplaza la lógica de "PENDING" -> "COMPLETED". Si existe, es que fue exitoso.
+                // ============================================================
+                // 6. LOG DE AUDITORÍA
+                // ============================================================
                 const transactionId = `tx-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
                 await db.table(STORES.TRANSACTION_LOG).add({
                     id: transactionId,
@@ -123,7 +206,6 @@ export const salesRepository = {
         } catch (error) {
             // Manejo especial para errores de negocio (Stock) vs errores técnicos
             if (error.message && error.message.includes('STOCK_INSUFFICIENT')) {
-                // Retornamos un error limpio para que el UI muestre alerta sin crashear
                 return {
                     success: false,
                     isStockError: true,
@@ -138,11 +220,11 @@ export const salesRepository = {
     /**
      * Obtiene ventas desde una fecha específica hasta hoy.
      * Utiliza el índice 'timestamp' para evitar escanear toda la tabla.
-     * * @param {string} isoDateString - Fecha de inicio en formato ISO.
+     * 
+     * @param {string} isoDateString - Fecha de inicio en formato ISO.
      */
     async getOrdersSince(isoDateString) {
         try {
-            // aboveOrEqual es el equivalente moderno de IDBKeyRange.lowerBound
             return await db.table(STORES.SALES)
                 .where('timestamp').aboveOrEqual(isoDateString)
                 .toArray();
