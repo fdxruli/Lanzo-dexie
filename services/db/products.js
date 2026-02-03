@@ -345,54 +345,43 @@ export const productsRepository = {
                 }
 
                 // ═══════════════════════════════════════════════════════════
-                // SUBFASE 1.4: SINCRONIZAR PRODUCTOS PADRE (CORREGIDO & BLINDADO)
+                // 🔥 SUBFASE 1.4: SINCRONIZAR PRODUCTOS PADRE (CORREGIDO)
                 // ═══════════════════════════════════════════════════════════
                 const parentUpdateSummary = [];
 
                 for (const productId of affectedProductIds) {
-                    // A. Obtener lotes de BD (Sabemos que esto puede estar incompleto por Lag de Índice)
-                    const dbBatches = await db.table(STORES.PRODUCT_BATCHES)
+                    // ✅ CORRECCIÓN CLAVE: Leer TODOS los lotes del producto
+                    // (no solo los que modificamos)
+                    const allProductBatches = await db.table(STORES.PRODUCT_BATCHES)
                         .where('productId').equals(productId)
                         .toArray();
 
-                    // B. FUSIÓN ROBUSTA: Combinar BD + Memoria
-                    const mergedBatches = new Map();
-
-                    // 1. Llenar con lo que diga la BD primero
-                    dbBatches.forEach(b => {
-                        if (b && b.id) mergedBatches.set(b.id, b);
+                    // ✅ SOBRESCRIBIR con valores de memoria (los que acabamos de actualizar)
+                    const truthMap = new Map();
+                    
+                    // 1. Primero metemos todo lo que vino de la BD
+                    allProductBatches.forEach(b => {
+                        if (b && b.id) truthMap.set(b.id, b);
                     });
 
-                    // 2. SOBRESCRIBIR FORZOSAMENTE con lo que tenemos en memoria
-                    // Usamos String() para asegurar que la comparación de IDs no falle por tipos
-                    updatedBatchesMap.forEach((batch) => {
-                        // Comparamos como String para evitar errores '1' vs 1
-                        if (String(batch.productId) === String(productId)) {
-                            // ¡Aquí forzamos la "Verdad Absoluta" de la transacción!
-                            mergedBatches.set(batch.id, batch);
+                    // 2. SOBRESCRIBIMOS con la verdad absoluta de memoria
+                    updatedBatchesMap.forEach((memoryBatch, batchId) => {
+                        if (String(memoryBatch.productId) === String(productId)) {
+                            truthMap.set(batchId, memoryBatch);
                         }
                     });
 
-                    // C. Calcular stock total del producto
-                    const finalBatches = Array.from(mergedBatches.values());
-                    
-                    // DEBUG: Ver qué está sumando realmente (aparecerá en consola)
-                    /* console.log(`[Sync ${productId}] Batches found:`, finalBatches.map(b => 
-                        `${b.sku || 'NoSKU'} (Stock: ${b.stock}, Active: ${b.isActive})`
-                    )); */
-
+                    // 3. Calculamos stock sumando SOLO lotes activos con stock > 0
+                    const finalBatches = Array.from(truthMap.values());
                     const activeBatches = finalBatches.filter(b => {
-                        // CORRECCIÓN CRÍTICA:
-                        // 1. Usamos Number() para evitar concatenación de strings ("10" + "3" = "103")
-                        // 2. Ignoramos b.isActive si tiene stock físico real. 
-                        //    (A veces un lote se marca inactivo erróneamente pero tiene stock).
                         const stockVal = Number(b.stock);
-                        return !isNaN(stockVal) && stockVal > (config.tolerance || 0.0001);
+                        const isActuallyActive = Boolean(b.isActive) && !isNaN(stockVal) && stockVal > config.tolerance;
+                        return isActuallyActive;
                     });
 
                     const totalStock = activeBatches.reduce((sum, b) => sum + Number(b.stock), 0);
 
-                    // D. Obtener producto padre
+                    // 4. Actualizar producto padre
                     const product = await db.table(STORES.MENU).get(productId);
 
                     if (!product) {
@@ -400,14 +389,12 @@ export const productsRepository = {
                         continue;
                     }
 
-                    // E. Actualizar solo si trackStock está activo
                     if (product.trackStock) {
                         const stockBefore = product.stock || 0;
 
                         if (!config.dryRun) {
                             await db.table(STORES.MENU).update(productId, {
                                 stock: totalStock,
-                                // Reactivamos producto si tiene stock positivo, sin importar estado previo
                                 isActive: product.isActive !== false, 
                                 updatedAt: new Date().toISOString()
                             });
