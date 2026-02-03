@@ -1,0 +1,254 @@
+/* --- Overlay: El fondo oscuro que cubre toda la pantalla --- */
+.terms-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.6); /* Fondo semitransparente */
+  backdrop-filter: blur(4px); /* Efecto borroso moderno */
+  z-index: 9999; /* Siempre encima de todo */
+  
+  /* ESTO SOLUCIONA TU PROBLEMA DE CENTRADO: */
+  display: flex;
+  align-items: center; /* Centra verticalmente */
+  justify-content: center; /* Centra horizontalmente */
+  padding: 16px; /* Margen de seguridad para que no toque los bordes en móvil */
+  
+  /* Animación de entrada suave */
+  animation: overlayFadeIn 0.3s ease-out forwards;
+}
+
+/* --- Content: La caja blanca del modal --- */
+.terms-modal-content {
+  background-color: var(--bg-paper, #ffffff); /* Usa tu variable o blanco por defecto */
+  width: 100%;
+  max-width: 500px; /* Ancho máximo en escritorio */
+  max-height: 85vh; /* Ocupa máximo el 85% de la altura de la pantalla */
+  
+  border-radius: 16px; /* Bordes redondeados modernos */
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1);
+  
+  /* Estructura interna flexible para header/body/footer */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* Para que el contenido no se salga de los bordes redondeados */
+  
+  /* Animación de subida */
+  animation: modalSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  position: relative;
+}
+
+/* --- Header: Título y botón cerrar --- */
+.terms-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border-color, #e2e8f0);
+  background-color: var(--bg-paper, #ffffff);
+  flex-shrink: 0; /* Evita que se encoja */
+}
+
+.terms-title-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.terms-title-group h3 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--text-primary, #1a202c);
+}
+
+.terms-version-badge {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--text-secondary, #718096);
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  margin-top: 2px;
+  text-transform: uppercase;
+}
+
+.terms-close-btn {
+  background: transparent;
+  border: none;
+  color: var(--text-secondary, #718096);
+  cursor: pointer;
+  padding: 8px;
+  margin: -8px; /* Aumenta el área de toque sin afectar el layout */
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.terms-close-btn:hover {
+  background-color: var(--bg-hover, #f7fafc);
+  color: var(--text-primary, #1a202c);
+}
+
+/* --- Body: El área con scroll --- */
+.terms-body {
+  flex: 1; /* Ocupa todo el espacio disponible */
+  overflow-y: auto; /* Habilita SCROLL solo aquí */
+  padding: 20px;
+  position: relative;
+  
+  /* Scrollbar bonita */
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e0 transparent;
+}
+
+.terms-body::-webkit-scrollbar {
+  width: 6px;
+}
+.terms-body::-webkit-scrollbar-thumb {
+  background-color: #cbd5e0;
+  border-radius: 4px;
+}
+
+/* Contenido dinámico HTML */
+.terms-dynamic-content {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: var(--text-primary, #2d3748);
+}
+
+.terms-dynamic-content h1, 
+.terms-dynamic-content h2, 
+.terms-dynamic-content h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+  color: var(--text-primary, #1a202c);
+}
+
+.terms-dynamic-content p {
+  margin-bottom: 1rem;
+}
+
+/* Estados de carga y error */
+.terms-loading-state,
+.terms-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--text-secondary, #718096);
+  height: 100%;
+}
+
+.terms-error-state p {
+  margin-top: 16px;
+  font-size: 0.9rem;
+}
+
+.terms-legal-footer {
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px dashed var(--border-color, #e2e8f0);
+  font-size: 0.8rem;
+  color: var(--text-secondary, #718096);
+  line-height: 1.4;
+}
+
+/* --- Footer: Botones de acción --- */
+.terms-footer {
+  padding: 16px 20px;
+  border-top: 1px solid var(--border-color, #e2e8f0);
+  background-color: var(--bg-subtle, #f8fafc); /* Un gris muy clarito */
+  display: flex;
+  justify-content: flex-end; /* Alinea botones a la derecha */
+  gap: 12px;
+  flex-shrink: 0; /* Evita que desaparezca */
+}
+
+/* Botones base (asumiendo que tienes clases globales, pero por seguridad las definimos) */
+.btn {
+  padding: 0.6rem 1.2rem;
+  border-radius: 8px;
+  font-weight: 500;
+  font-size: 0.95rem;
+  cursor: pointer;
+  border: none;
+  transition: all 0.2s;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.btn-secondary {
+  background-color: white;
+  border: 1px solid var(--border-color, #cbd5e0);
+  color: var(--text-primary, #4a5568);
+}
+
+.btn-primary {
+  background-color: var(--primary-color, #3182ce); /* Azul por defecto */
+  color: white;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+/* --- Animaciones Keyframes --- */
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalSlideUp {
+  from { 
+    opacity: 0;
+    transform: translateY(20px) scale(0.95);
+  }
+  to { 
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+/* --- Soporte Dark Mode (Si usas data-theme="dark") --- */
+[data-theme='dark'] .terms-modal-content,
+[data-theme='dark'] .terms-header {
+  background-color: #1a202c; /* Gris oscuro */
+  border-color: #2d3748;
+}
+
+[data-theme='dark'] .terms-footer {
+  background-color: #171923; /* Más oscuro */
+  border-color: #2d3748;
+}
+
+[data-theme='dark'] .terms-title-group h3,
+[data-theme='dark'] .terms-dynamic-content {
+  color: #f7fafc;
+}
+
+[data-theme='dark'] .terms-close-btn:hover {
+  background-color: #2d3748;
+  color: white;
+}
+
+/* Corrección para que los títulos dentro del contenido HTML sean blancos en modo oscuro */
+[data-theme='dark'] .terms-dynamic-content h1,
+[data-theme='dark'] .terms-dynamic-content h2,
+[data-theme='dark'] .terms-dynamic-content h3,
+[data-theme='dark'] .terms-dynamic-content h4,
+[data-theme='dark'] .terms-dynamic-content strong {
+  color: #f7fafc !important; /* Forzamos color claro */
+}
+
+/* Opcional: Si tienes enlaces en los términos */
+[data-theme='dark'] .terms-dynamic-content a {
+  color: #63b3ed; /* Azul claro legible */
+}

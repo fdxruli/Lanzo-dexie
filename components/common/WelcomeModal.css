@@ -1,0 +1,243 @@
+/* src/components/common/WelcomeModal.css */
+
+/* =========================================
+   1. ESTILOS BASE (MOBILE FIRST)
+   Pantalla completa en celular
+   ========================================= */
+
+/* Contenedor wrapper (heredado de .modal en index.css pero forzamos reset) */
+.modal:has(.welcome-modal-content) {
+  padding: 0 !important;
+  align-items: flex-start;
+}
+
+.welcome-modal-content {
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  border-radius: 0;
+  border: none;
+  box-shadow: none;
+  background-color: var(--card-background-color);
+  /* O el color oscuro de tu tema */
+
+  display: flex;
+  flex-direction: column;
+
+  /* --- CAMBIO CLAVE 1: Centrar contenido verticalmente --- */
+  justify-content: center;
+  align-items: center;
+  /* Centrar horizontalmente */
+
+  padding: 30px 25px;
+  /* Un poco más de aire a los lados */
+  padding-top: max(50px, env(safe-area-inset-top));
+
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* Barra decorativa superior (Opcional en móvil, la ajustamos) */
+.welcome-modal-content::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 6px;
+  background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+  border-radius: 0;
+  /* Sin bordes redondos en móvil */
+}
+
+/* Título */
+.welcome-modal-content h2 {
+  font-size: clamp(1.8rem, 5vw, 2.2rem);
+  font-weight: 900;
+  text-align: center;
+  
+  /* --- CAMBIO: Aumentar margen superior --- */
+  margin-top: 50px; /* Antes era 10px */
+  margin-bottom: 1.5rem;
+  
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--secondary-color) 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--primary-color);
+}
+
+/* Resumen / Features */
+.welcome-summary {
+  background-color: var(--light-background);
+  /* O un tono gris suave */
+  padding: 20px;
+  border-radius: 16px;
+  margin-bottom: 10px;
+  /* Reducimos margen inferior */
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  width: 100%;
+  max-width: 400px;
+  /* Limitar ancho para estética */
+}
+
+.welcome-summary p {
+  margin-bottom: 10px;
+}
+
+.welcome-summary ul {
+  padding: 0;
+  list-style: none;
+  margin: 0;
+}
+
+.welcome-summary li {
+  margin-bottom: 8px;
+  padding-left: 25px;
+  position: relative;
+  font-size: 0.9rem;
+}
+
+.welcome-summary li::before {
+  content: '✓';
+  position: absolute;
+  left: 0;
+  color: var(--success-color);
+  font-weight: 900;
+}
+
+/* Formularios y Botones GRANDES para el dedo */
+#license-form {
+  width: 100%;
+  max-width: 400px;
+  /* Para que no se vea gigante en tablets */
+
+  /* --- CAMBIO CLAVE 2: Quitamos margin-top: auto --- */
+  margin-top: 30px;
+  /* Solo un margen fijo para separar del resumen */
+
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  /* Espacio entre inputs y botones */
+}
+
+.welcome-modal-content .form-input {
+  padding: 16px;
+  border-radius: 12px;
+  font-size: 1.1rem;
+  text-align: center;
+  letter-spacing: 2px;
+  font-family: 'Consolas', monospace;
+  width: 100%;
+  background-color: var(--light-background);
+  border: 2px solid transparent;
+}
+
+.welcome-modal-content .form-input:focus {
+  background-color: var(--card-background-color);
+  border-color: var(--primary-color);
+}
+
+#license-form .btn-save {
+  width: 100%;
+  padding: 18px;
+  font-size: 1.1rem;
+  border-radius: 14px;
+  margin-top: 15px;
+  background: linear-gradient(135deg, var(--primary-color) 0%, var(--primary-hover) 100%);
+  box-shadow: 0 10px 20px rgba(255, 59, 92, 0.25);
+  border: none;
+  color: white;
+  font-weight: 800;
+}
+
+.trial-divider {
+  margin: 25px 0;
+  text-align: center;
+  position: relative;
+  color: var(--text-light);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+}
+
+.btn-trial {
+  width: 100%;
+  padding: 16px;
+  border-radius: 14px;
+  background: transparent;
+  border: 2px solid var(--secondary-color);
+  color: var(--secondary-color);
+  font-weight: 700;
+}
+
+/* Footer y mensajes */
+.welcome-footer {
+  margin-top: 20px;
+  /* Acercarlo al botón de probar gratis */
+  text-align: center;
+  padding-bottom: max(20px, env(safe-area-inset-bottom));
+  width: 100%;
+}
+
+.welcome-error-message {
+  margin-top: 20px;
+  padding: 12px;
+  background-color: rgba(255, 59, 92, 0.1);
+  color: var(--error-color);
+  border-radius: 8px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.btn-support-link {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  text-decoration: underline;
+  margin-top: 15px;
+  display: inline-block;
+}
+
+/* =========================================
+   2. MEDIA QUERY: ESCRITORIO (>= 768px)
+   Recuperar estilo "Modal Flotante"
+   ========================================= */
+@media (min-width: 768px) {
+
+  /* Reset del contenedor padre para que centre */
+  .modal:has(.welcome-modal-content) {
+    padding: 20px !important;
+    align-items: center;
+  }
+
+  .welcome-modal-content {
+    width: 90%;
+    max-width: 550px;
+    /* Límite */
+    height: auto;
+    /* Altura automática */
+    max-height: 90vh;
+    /* No pasarse */
+
+    border-radius: 24px;
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+    border: 1px solid var(--border-color);
+    padding: 40px;
+    /* Más padding interno */
+  }
+
+  .welcome-modal-content::before {
+    border-top-left-radius: 24px;
+    border-top-right-radius: 24px;
+  }
+
+  .welcome-modal-content h2 {
+    font-size: 2.2rem;
+  }
+
+  /* Quitamos el margin-top auto del form para que no se pegue al fondo en desktop */
+  #license-form {
+    margin-top: 0;
+  }
+}

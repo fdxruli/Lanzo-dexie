@@ -1,0 +1,185 @@
+/*
+ * Estilos para PaymentModal.jsx
+ */
+#payment-modal {
+  z-index: 9999;
+}
+
+.payment-details {
+  margin-bottom: var(--spacing-lg);
+}
+
+.payment-label {
+  font-weight: 500;
+  margin-bottom: var(--spacing-xs);
+}
+
+.payment-total {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary-color);
+  margin-bottom: var(--spacing-md);
+}
+
+.payment-input {
+  margin-bottom: var(--spacing-md);
+  font-size: 1.2rem;
+  text-align: center;
+}
+
+.payment-change {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--success-color);
+  text-align: center;
+}
+
+.btn-confirm {
+  background-color: var(--success-color);
+  color: white;
+  width: 100%;
+  margin-bottom: var(--spacing-sm);
+}
+
+.btn-confirm:hover {
+  background-color: #059669;
+}
+
+.btn-confirm:disabled {
+  background-color: #9ca3af;
+  /* TODO: Usar variable */
+  cursor: not-allowed;
+}
+
+.btn-cancel-payment {
+  background-color: transparent;
+  color: var(--text-light);
+  border: 1px solid #e5e7eb;
+  /* TODO: Usar variable */
+  width: 100%;
+}
+
+.btn-cancel-payment:hover {
+  background-color: rgba(239, 68, 68, 0.1);
+  color: var(--error-color);
+  border-color: var(--error-color);
+}
+
+.form-group.customer-search-wrapper {
+  position: relative;
+}
+
+.customer-search-results {
+  position: absolute;
+  width: 100%;
+  background-color: var(--card-background-color);
+  border: 1px solid var(--primary-color);
+  border-top: none;
+  border-radius: 0 0 var(--border-radius-sm) var(--border-radius-sm);
+  box-shadow: var(--box-shadow);
+  max-height: 150px;
+  overflow-y: auto;
+  z-index: 10;
+  /* Asegura que esté sobre el input de monto */
+}
+
+.customer-result-item {
+  padding: var(--spacing-sm);
+  cursor: pointer;
+  color: var(--text-color);
+  font-size: 0.9rem;
+}
+
+.customer-result-item:hover {
+  background-color: var(--light-background);
+  color: var(--primary-color);
+}
+
+.customer-result-item:not(:last-child) {
+  border-bottom: 1px solid var(--light-background);
+}
+
+.payment-method-selector {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+}
+
+.btn-method {
+  flex: 1;
+  padding: var(--spacing-sm);
+  border: 1px solid #e5e7eb;
+  /* TODO: Usar variable */
+  background-color: var(--card-background-color);
+  color: var(--text-light);
+}
+
+.btn-method:hover {
+  background-color: var(--light-background);
+  color: var(--primary-color);
+}
+
+.btn-method.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+/* --- Botón de añadir rápido --- */
+.btn-quick-add {
+  background-color: transparent;
+  color: var(--primary-color);
+  border: none;
+  padding: var(--spacing-xs) 0;
+  margin-top: var(--spacing-xs);
+  cursor: pointer;
+}
+
+.btn-quick-add:hover {
+  text-decoration: underline;
+}
+
+/* --- Saldo pendiente (fiado) --- */
+.payment-saldo {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--error-color);
+  /* Lo marcamos como deuda */
+  text-align: center;
+}
+
+/* Estilos para los botones de billetes rápidos */
+.quick-cash-options {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  /* 3 columnas */
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-md);
+  margin-top: -10px;
+  /* Un pequeño ajuste para pegarlo al input de arriba */
+}
+
+.btn-cash-option {
+  padding: 8px 4px;
+  border: 1px solid #d1d5db;
+  /* Gris suave */
+  background-color: white;
+  color: var(--text-color);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s;
+}
+
+.btn-cash-option:hover {
+  background-color: var(--light-background);
+  border-color: var(--primary-color);
+  color: var(--primary-color);
+  transform: translateY(-1px);
+}
+
+.btn-cash-option:active {
+  transform: translateY(0);
+  background-color: #e5e7eb;
+}
