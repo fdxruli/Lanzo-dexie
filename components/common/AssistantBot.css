@@ -1,0 +1,269 @@
+/* src/components/common/AssistantBot.css */
+
+/* Contenedor principal posicionado fijamente */
+.lanzo-bot-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: var(--z-toast); /* Usamos la variable de z-index definida en index.css */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  font-family: inherit; /* Heredar la fuente de la app (Inter) */
+}
+
+/* =========================================
+   ESTILOS DEL BOTÓN FLOTANTE
+   ========================================= */
+
+.lanzo-bot-avatar {
+  width: 65px;
+  height: 65px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  padding: 0;
+  outline: none;
+  
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  position: relative;
+}
+
+.lanzo-bot-avatar:hover {
+  transform: scale(1.15) rotate(-8deg);
+}
+
+.bot-icon-svg {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  /* Sombra adaptativa: usamos text-light para la sombra base */
+  filter: drop-shadow(0 4px 8px rgba(0,0,0,0.25));
+  transition: filter 0.3s ease;
+}
+
+/* En modo oscuro, a veces se requiere un "glow" o sombra diferente si el icono es oscuro, 
+   pero esperaré a ver tu SVG para ajustar esto si es necesario. */
+
+.lanzo-bot-avatar:hover .bot-icon-svg {
+  filter: drop-shadow(0 8px 16px rgba(0,0,0,0.35));
+}
+
+/* =========================================
+   ESTADOS DE ALERTA
+   ========================================= */
+
+.lanzo-bot-avatar.has-alert {
+  animation: pulse-alert 2s infinite;
+}
+
+.lanzo-bot-avatar.has-alert svg {
+  color: var(--error-color) !important; /* Usamos variable de error */
+  filter: drop-shadow(0 2px 4px rgba(255, 59, 92, 0.4));
+  width: 70%; 
+  height: 70%;
+}
+
+@keyframes pulse-alert {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.notification-dot {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 12px;
+  height: 12px;
+  background-color: var(--error-color); /* Usamos variable */
+  border-radius: 50%;
+  border: 2px solid var(--card-background-color); /* Borde del color de la tarjeta para "cortar" */
+}
+
+/* =========================================
+   GLOBO DE MENSAJE (CARD)
+   ========================================= */
+.lanzo-bot-card {
+  /* Fondo y bordes adaptables al tema */
+  background-color: var(--card-background-color);
+  border: 1px solid var(--border-color);
+  color: var(--text-color);
+  
+  width: 320px;
+  border-radius: var(--border-radius);
+  box-shadow: var(--box-shadow-lg);
+  margin-bottom: 15px;
+  overflow: hidden;
+  
+  /* Transición suave al cambiar de tema */
+  transition: background-color 0.3s, border-color 0.3s, box-shadow 0.3s;
+}
+
+.animate-pop-in {
+  animation: popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  transform-origin: bottom right;
+}
+
+@keyframes popIn {
+  from { opacity: 0; transform: scale(0.8) translateY(20px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.bot-header {
+  /* Fondo ligeramente diferente al body del card para separar */
+  background-color: var(--light-background);
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.bot-title {
+  font-weight: 600;
+  color: var(--text-dark); /* Texto principal */
+  font-size: 15px;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  color: var(--text-light);
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s, background-color 0.2s;
+}
+
+.close-btn:hover {
+  background-color: rgba(0,0,0,0.05); /* Sutil hover */
+  color: var(--text-dark);
+}
+
+/* Ajuste de hover en modo oscuro */
+[data-theme="dark"] .close-btn:hover {
+  background-color: rgba(255,255,255,0.1);
+}
+
+.bot-body {
+  padding: 16px;
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.context-message {
+  color: var(--text-color);
+  font-size: 14px;
+  line-height: 1.5;
+  margin-bottom: 12px;
+}
+
+/* TIPS SECTION: Adaptado a tus colores (Secondary/Purple) */
+.bot-tips {
+  /* Usamos un fondo muy sutil basado en el color secundario o light-background */
+  background-color: var(--light-background); 
+  padding: 12px;
+  border-radius: var(--border-radius-sm);
+  border-left: 3px solid var(--secondary-color); /* Morado Lanzo */
+}
+
+.bot-tips small {
+  display: block;
+  font-weight: 600;
+  color: var(--secondary-color); /* Título del tip en morado */
+  margin-bottom: 6px;
+}
+
+.bot-tips ul {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--text-color);
+  font-size: 13px;
+}
+
+.bot-tips li {
+  margin-bottom: 4px;
+}
+
+/* =========================================
+   ESTILOS PARA ALERTA GLOBAL (IMPORTANTE)
+   ========================================= */
+.alert-content {
+  text-align: center;
+}
+
+.alert-text {
+  color: var(--text-dark); 
+  font-size: 14px; 
+  margin-bottom: 12px;
+}
+
+/* Si es alerta crítica, usamos error-color */
+.alert-text.critical {
+  color: var(--error-color);
+  font-weight: 600;
+}
+
+.action-btn {
+  width: 100%; 
+  background-color: var(--error-color); 
+  color: white; 
+  border: none; 
+  padding: 8px; 
+  border-radius: var(--border-radius-sm); 
+  cursor: pointer; 
+  font-weight: 500; 
+  display: flex; 
+  align-items: center; 
+  justify-content: center; 
+  margin-bottom: 8px;
+  transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+  background-color: var(--primary-hover); 
+}
+
+.dismiss-link {
+  background: none; 
+  border: none; 
+  color: var(--text-light); 
+  text-decoration: underline; 
+  font-size: 12px; 
+  cursor: pointer; 
+  width: 100%;
+}
+
+.dismiss-link:hover {
+  color: var(--text-color);
+}
+
+/* =========================================
+   MEDIA QUERIES (RESPONSIVE)
+   ========================================= */
+
+@media (max-width: 768px) {
+  .lanzo-bot-container {
+    bottom: 85px; 
+    right: 15px;
+  }
+
+  .lanzo-bot-avatar {
+    width: 55px;
+    height: 55px;
+  }
+  
+  .lanzo-bot-card {
+    width: 280px;
+    margin-bottom: 10px;
+  }
+}
