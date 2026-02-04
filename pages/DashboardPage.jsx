@@ -25,7 +25,7 @@ import './DashboardPage.css';
 export default function DashboardPage() {
   const [customers, setCustomers] = useState([]);
   const [activeTab, setActiveTab] = useState('stats');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const features = useFeatureConfig();
 
@@ -66,10 +66,30 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
-    if (searchParams.get('tab') === 'waste') {
-      setActiveTab('waste');
+    const tabParam = searchParams.get('tab');
+    // Mapeo de URL a estado interno
+    const tabMap = {
+        'stats': 'stats',
+        'tips': 'tips',
+        'restock': 'restock',
+        'history': 'history',
+        'expiration': 'expiration',
+        'waste': 'waste'
+    };
+
+    if (tabParam && tabMap[tabParam]) {
+        setActiveTab(tabMap[tabParam]);
     }
-  }, [searchParams]);
+}, [searchParams]);
+
+
+const handleTabChange = (tabKey) => {
+    if (tabKey === 'stats') {
+        setSearchParams({}); // Limpia la URL para la vista por defecto
+    } else {
+        setSearchParams({ tab: tabKey });
+    }
+};
 
   useEffect(() => {
     if (activeTab === 'history') loadRecycleBin();
@@ -90,14 +110,14 @@ export default function DashboardPage() {
       <div className="tabs-container" id="sales-tabs">
         <button
           className={`tab-btn ${activeTab === 'stats' ? 'active' : ''}`}
-          onClick={() => setActiveTab('stats')}
+          onClick={() => handleTabChange('stats')}
         >
           Estadísticas Clave
         </button>
 
         <button
           className={`tab-btn ${activeTab === 'tips' ? 'active' : ''}`}
-          onClick={() => setActiveTab('tips')}
+          onClick={() => handleTabChange('tips')}
         >
           Consejos Lan
         </button>
@@ -105,7 +125,7 @@ export default function DashboardPage() {
         {features.hasMinMax && (
           <button
             className={`tab-btn ${activeTab === 'restock' ? 'active' : ''}`}
-            onClick={() => setActiveTab('restock')}
+            onClick={() => handleTabChange('restock')}
           >
             Reabastecimiento
           </button>
@@ -113,14 +133,14 @@ export default function DashboardPage() {
 
         <button
           className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`}
-          onClick={() => setActiveTab('history')}
+          onClick={() => handleTabChange('history')}
         >
           Historial y Papelera
         </button>
 
         <button
           className={`tab-btn ${activeTab === 'expiration' ? 'active' : ''}`}
-          onClick={() => setActiveTab('expiration')}
+          onClick={() => handleTabChange('expiration')}
         >
           Caducidad
         </button>
@@ -128,7 +148,7 @@ export default function DashboardPage() {
         {features.hasWaste && (
           <button
             className={`tab-btn ${activeTab === 'waste' ? 'active' : ''}`}
-            onClick={() => setActiveTab('waste')}
+            onClick={() => handleTabChange('waste')}
             style={{ color: activeTab === 'waste' ? 'var(--error-color)' : '' }}
           >
             Mermas

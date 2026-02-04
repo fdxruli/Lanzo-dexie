@@ -24,7 +24,7 @@ import { useSearchParams } from 'react-router-dom'
 export default function ProductsPage() {
     const [showDailyPrice, setShowDailyPrice] = useState(false);
     const [activeTab, setActiveTab] = useState('view-products');
-    const [searchParams] = useSearchParams();
+    const [searchParams, setSearchParams] = useSearchParams();
     const features = useFeatureConfig();
     const companyProfile = useAppStore(state => state.companyProfile);
     const isApparel = (() => {
@@ -55,26 +55,27 @@ export default function ProductsPage() {
         refreshData();
     }, []);
 
-    useEffect(() => {
-        const tabParam = searchParams.get('tab');
-        
-        if (tabParam) {
-            // Mapeamos los nombres cortos de la URL a los IDs internos de tus pestañas
-            const tabMap = {
-                'add': 'add-product',       // Viene del bot como ?tab=add
-                'batches': 'batches',       // Viene del bot como ?tab=batches
-                'ingredients': 'ingredients',
-                'categories': 'categories',
-                'variants': 'variants-view'
-            };
+    const handleTabChange = (tabKey) => {
+        const urlMap = {
+            'add-product': 'add',
+            'view-products': 'list',
+            'batches': 'batches',
+            'ingredients': 'ingredients',
+            'categories': 'categories',
+            'variants-view': 'variants'
+        };
 
-            // Si el parámetro coincide con alguna pestaña, la activamos
-            if (tabMap[tabParam]) {
-                setActiveTab(tabMap[tabParam]);
-            }
+        const paramValue = urlMap[tabKey];
+
+        if (paramValue === 'list') {
+            setSearchParams({});
+        } else {
+            setSearchParams({ tab: paramValue });
         }
-    }, [searchParams]);
-    
+
+        setActiveTab(tabKey);
+    };
+
     // --- FILTROS PARA PESTAÑAS ---
     const productsForSale = products.filter(p => p.productType === 'sellable' || !p.productType);
     const ingredientsOnly = products.filter(p => p.productType === 'ingredient');
@@ -388,21 +389,21 @@ export default function ProductsPage() {
             <div className="tabs-container" id="product-tabs" style={{ overflowX: 'auto' }}>
                 <button
                     className={`tab-btn ${activeTab === 'add-product' ? 'active' : ''}`}
-                    onClick={() => { setEditingProduct(null); setActiveTab('add-product'); }}
+                    onClick={() => { setEditingProduct(null); handleTabChange('add-product'); }}
                 >
                     {editingProduct && !editingProduct.id ? 'Nuevo Insumo' : (editingProduct ? 'Editar Item' : 'Añadir Producto')}
                 </button>
 
                 <button
                     className={`tab-btn ${activeTab === 'view-products' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('view-products')}
+                    onClick={() => handleTabChange('view-products')}
                 >
                     Productos (Venta)
                 </button>
 
                 <button
                     className={`tab-btn ${activeTab === 'batches' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('batches')}
+                    onClick={() => handleTabChange('batches')}
                 >
                     Gestionar Lotes
                 </button>
@@ -410,7 +411,7 @@ export default function ProductsPage() {
                 {features.hasRecipes && (
                     <button
                         className={`tab-btn ${activeTab === 'ingredients' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('ingredients')}
+                        onClick={() => handleTabChange('ingredients')}
                     >
                         Ingredientes/Insumos
                     </button>
@@ -419,7 +420,7 @@ export default function ProductsPage() {
                 {features.hasVariants && isApparel && (
                     <button
                         className={`tab-btn ${activeTab === 'variants-view' ? 'active' : ''}`}
-                        onClick={() => setActiveTab('variants-view')}
+                        onClick={() => handleTabChange('variants-view')}
                     >
                         Inventario Global (Tallas)
                     </button>
@@ -427,7 +428,7 @@ export default function ProductsPage() {
 
                 <button
                     className={`tab-btn ${activeTab === 'categories' ? 'active' : ''}`}
-                    onClick={() => setActiveTab('categories')}
+                    onClick={() => handleTabChange('categories')}
                 >
                     Categorías
                 </button>

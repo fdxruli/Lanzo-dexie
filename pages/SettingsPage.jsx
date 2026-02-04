@@ -8,42 +8,56 @@ import { useSearchParams } from 'react-router-dom';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
 
   useEffect(() => {
-       if (searchParams.get('tab') === 'maintenance') {
-           setActiveTab('maintenance');
-       }
-   }, [searchParams]);
+    const tabParam = searchParams.get('tab');
+    const tabMap = {
+      'general': 'general',
+      'license': 'license',
+      'maintenance': 'maintenance',
+      'debug': 'debug'
+    };
+
+    if (tabParam && tabMap[tabParam]) {
+      setActiveTab(tabMap[tabParam]);
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (tabKey) => {
+    // Si es 'general', limpiamos la URL, si no, ponemos el parámetro
+    const param = tabKey === 'general' ? {} : { tab: tabKey };
+    setSearchParams(param);
+  };
 
   return (
     <div className="settings-page-wrapper">
       <div className="tabs-container">
         <button
           className={`tab-btn ${activeTab === 'general' ? 'active' : ''}`}
-          onClick={() => setActiveTab('general')}
+          onClick={() => handleTabChange('general')}
         >
           Datos y Apariencia
         </button>
         <button
           className={`tab-btn ${activeTab === 'license' ? 'active' : ''}`}
-          onClick={() => setActiveTab('license')}
+          onClick={() => handleTabChange('license')}
         >
           Licencia y Rubros
         </button>
         <button
           className={`tab-btn ${activeTab === 'maintenance' ? 'active' : ''}`}
-          onClick={() => setActiveTab('maintenance')}
+          onClick={() => handleTabChange('maintenance')}
         >
           Datos y Mantenimiento
         </button>
         {import.meta.env.DEV && (
           <button
-          className={`tab-btn ${activeTab === 'debug' ? 'active' : ''}`} // Ajusta 'tab-btn' a tu clase CSS real
-          onClick={() => setActiveTab('debug')}
-        >
-          Depuración DB
-        </button>
+            className={`tab-btn ${activeTab === 'debug' ? 'active' : ''}`} // Ajusta 'tab-btn' a tu clase CSS real
+            onClick={() => handleTabChange('debug')}
+          >
+            Depuración DB
+          </button>
         )}
       </div>
 

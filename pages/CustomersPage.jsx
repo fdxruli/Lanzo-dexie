@@ -23,7 +23,7 @@ import {
 export default function CustomersPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('add-customer');
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,16 +38,30 @@ export default function CustomersPage() {
   const { registrarMovimiento, cajaActual } = useCaja();
   const companyName = useAppStore((state) => state.companyProfile?.name || 'Tu Negocio');
 
-  // ... (funciones loadCustomers, handleSaveCustomer, handleEditCustomer, handleDeleteCustomer, etc. SIN CAMBIOS) ...
   useEffect(() => {
     loadInitialCustomers();
   }, []);
 
   useEffect(() => {
-       const tab = searchParams.get('tab');
-       if (tab === 'add') setActiveTab('add-customer');
-       if (tab === 'view') setActiveTab('view-customers');
-   }, [searchParams]);
+    const tabParam = searchParams.get('tab');
+
+    // Mapeo: URL -> Estado Interno
+    if (tabParam === 'add') {
+      setActiveTab('add-customer');
+    } else if (tabParam === 'list') { // Usaremos 'list' para ver clientes
+      setActiveTab('view-customers');
+      setEditingCustomer(null); // Aseguramos limpiar edición al entrar por URL
+    }
+  }, [searchParams]);
+
+  const handleTabChange = (internalTab) => {
+    if (internalTab === 'view-customers') {
+      setSearchParams({ tab: 'list' });
+      handleCancelEdit(); // Mantenemos tu limpieza original
+    } else if (internalTab === 'add-customer') {
+      setSearchParams({ tab: 'add' });
+    }
+  };
 
   const loadInitialCustomers = async () => {
     setLoading(true);
@@ -136,7 +150,7 @@ export default function CustomersPage() {
 
   const handleEditCustomer = (customer) => {
     setEditingCustomer(customer);
-    setActiveTab('add-customer');
+    setSearchParams({ tab: 'add' });
   };
 
   const handleDeleteCustomer = async (customerId) => {
@@ -375,14 +389,14 @@ ${itemsString}
       <div className="tabs-container" id="customers-tabs">
         <button
           className={`tab-btn ${activeTab === 'add-customer' ? 'active' : ''}`}
-          onClick={() => setActiveTab('add-customer')}
+          onClick={() => handleTabChange('add-customer')}
         >
           {editingCustomer ? 'Editar Cliente' : 'Añadir Cliente'}
         </button>
         <button
           className={`tab-btn ${activeTab === 'view-customers' ? 'active' : ''}`}
           onClick={() => {
-            setActiveTab('view-customers');
+            handleTabChange('view-customers');
             handleCancelEdit();
           }}
         >
