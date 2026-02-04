@@ -1,14 +1,20 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './SettingsPage.css';
-
-// Importamos los nuevos módulos
 import GeneralSettings from '../components/settings/GeneralSettings';
 import LicenseSettings from '../components/settings/LicenseSettings';
 import MaintenanceSettings from '../components/settings/MaintenanceSettings';
 import DbMigrationTester from '../components/debug/DbMigrationTester';
+import { useSearchParams } from 'react-router-dom';
 
 export default function SettingsPage() {
   const [activeTab, setActiveTab] = useState('general');
+  const [searchParams] = useSearchParams();
+
+  useEffect(() => {
+       if (searchParams.get('tab') === 'maintenance') {
+           setActiveTab('maintenance');
+       }
+   }, [searchParams]);
 
   return (
     <div className="settings-page-wrapper">

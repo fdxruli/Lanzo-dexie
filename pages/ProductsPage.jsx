@@ -19,11 +19,12 @@ import { useAppStore } from '../store/useAppStore';
 import ProductWizard from '../components/products/ProductWizard';
 import './ProductsPage.css';
 import Logger from '../services/Logger';
+import { useSearchParams } from 'react-router-dom'
 
 export default function ProductsPage() {
     const [showDailyPrice, setShowDailyPrice] = useState(false);
     const [activeTab, setActiveTab] = useState('view-products');
-
+    const [searchParams] = useSearchParams();
     const features = useFeatureConfig();
     const companyProfile = useAppStore(state => state.companyProfile);
     const isApparel = (() => {
@@ -54,6 +55,26 @@ export default function ProductsPage() {
         refreshData();
     }, []);
 
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        
+        if (tabParam) {
+            // Mapeamos los nombres cortos de la URL a los IDs internos de tus pestañas
+            const tabMap = {
+                'add': 'add-product',       // Viene del bot como ?tab=add
+                'batches': 'batches',       // Viene del bot como ?tab=batches
+                'ingredients': 'ingredients',
+                'categories': 'categories',
+                'variants': 'variants-view'
+            };
+
+            // Si el parámetro coincide con alguna pestaña, la activamos
+            if (tabMap[tabParam]) {
+                setActiveTab(tabMap[tabParam]);
+            }
+        }
+    }, [searchParams]);
+    
     // --- FILTROS PARA PESTAÑAS ---
     const productsForSale = products.filter(p => p.productType === 'sellable' || !p.productType);
     const ingredientsOnly = products.filter(p => p.productType === 'ingredient');

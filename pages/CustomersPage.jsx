@@ -9,6 +9,7 @@ import { showMessageModal, sendWhatsAppMessage } from '../services/utils';
 import { useAppStore } from '../store/useAppStore';
 import { useNavigate } from 'react-router-dom';
 import Logger from '../services/Logger';
+import { useSearchParams } from 'react-router-dom';
 
 import {
   saveDataSafe,
@@ -22,6 +23,7 @@ import {
 export default function CustomersPage() {
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('add-customer');
+  const [searchParams] = useSearchParams();
   const [customers, setCustomers] = useState([]);
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -40,6 +42,12 @@ export default function CustomersPage() {
   useEffect(() => {
     loadInitialCustomers();
   }, []);
+
+  useEffect(() => {
+       const tab = searchParams.get('tab');
+       if (tab === 'add') setActiveTab('new-customer');
+       if (tab === 'debt') setActiveTab('debtors');
+   }, [searchParams]);
 
   const loadInitialCustomers = async () => {
     setLoading(true);
