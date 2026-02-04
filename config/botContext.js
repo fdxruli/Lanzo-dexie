@@ -7,7 +7,7 @@ export const GLOBAL_ALERT = {
   id: 'update_v2_repair',
   title: "¡Actualización Importante!",
   message: "Hemos actualizado el sistema...",
-  actionLink: "/settings"
+  actionLink: "/configuracion?tab=maintenance"
 };
 
 /**
@@ -159,7 +159,6 @@ export const getQuickActions = (pathname, rubroType = 'abarrotes') => {
     ],
     '/clientes': [
       { label: "Nuevo Cliente", path: "/clientes?tab=add", icon: "" },
-      { label: "Ver Adeudos", path: "/clientes?filter=debt", icon: "" }
     ],
     '/ventas': [
       { label: "Exportar Datos", path: "/configuracion?tab=maintenance", icon: "" }

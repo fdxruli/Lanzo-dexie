@@ -1,6 +1,6 @@
 // src/pages/DashboardPage.jsx
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import Logger from '../services/Logger';
 
 // --- STORES ---
@@ -25,6 +25,7 @@ import './DashboardPage.css';
 export default function DashboardPage() {
   const [customers, setCustomers] = useState([]);
   const [activeTab, setActiveTab] = useState('stats');
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const features = useFeatureConfig();
 
@@ -65,6 +66,12 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    if (searchParams.get('tab') === 'waste') {
+      setActiveTab('waste');
+    }
+  }, [searchParams]);
+
+  useEffect(() => {
     if (activeTab === 'history') loadRecycleBin();
   }, [activeTab, loadRecycleBin]);
 
@@ -96,12 +103,12 @@ export default function DashboardPage() {
         </button>
 
         {features.hasMinMax && (
-            <button
-              className={`tab-btn ${activeTab === 'restock' ? 'active' : ''}`}
-              onClick={() => setActiveTab('restock')}
-            >
-              Reabastecimiento
-            </button>
+          <button
+            className={`tab-btn ${activeTab === 'restock' ? 'active' : ''}`}
+            onClick={() => setActiveTab('restock')}
+          >
+            Reabastecimiento
+          </button>
         )}
 
         <button
@@ -112,12 +119,12 @@ export default function DashboardPage() {
         </button>
 
         <button
-             className={`tab-btn ${activeTab === 'expiration' ? 'active' : ''}`}
-             onClick={() => setActiveTab('expiration')}
+          className={`tab-btn ${activeTab === 'expiration' ? 'active' : ''}`}
+          onClick={() => setActiveTab('expiration')}
         >
-             Caducidad
+          Caducidad
         </button>
-        
+
         {features.hasWaste && (
           <button
             className={`tab-btn ${activeTab === 'waste' ? 'active' : ''}`}
@@ -152,7 +159,7 @@ export default function DashboardPage() {
               <p>
                 Te recomendamos hacer una <strong>Copia de Seguridad</strong> semanalmente.
                 <button
-                  onClick={() => navigate('/settings')} 
+                  onClick={() => navigate('/settings')}
                   className="link-button"
                 >
                   Ir a Respaldar ahora →
@@ -163,7 +170,7 @@ export default function DashboardPage() {
 
           {/* Grid Principal: Historial (Izquierda) + Papelera (Derecha) */}
           <div className="history-layout-grid">
-            
+
             {/* Sección Principal: Historial */}
             <section className="dashboard-panel history-panel">
               <div className="panel-header">

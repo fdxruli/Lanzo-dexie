@@ -45,8 +45,8 @@ export default function CustomersPage() {
 
   useEffect(() => {
        const tab = searchParams.get('tab');
-       if (tab === 'add') setActiveTab('new-customer');
-       if (tab === 'debt') setActiveTab('debtors');
+       if (tab === 'add') setActiveTab('add-customer');
+       if (tab === 'view') setActiveTab('view-customers');
    }, [searchParams]);
 
   const loadInitialCustomers = async () => {
