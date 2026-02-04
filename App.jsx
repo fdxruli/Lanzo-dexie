@@ -123,35 +123,28 @@ function App() {
     let isReconnecting = false;
 
     const handleVisibilityChange = async () => {
-      // Si la pestaña pasa a ser visible y no estamos ya intentando reconectar
       if (document.visibilityState === 'visible') {
         if (isReconnecting) return;
         isReconnecting = true;
         Logger.log("👁️ Pestaña activa: Verificando salud del sistema...");
 
+        // Bandera para controlar si podemos proceder con operaciones de BD
+        let dbIsHealthy = false;
+
         try {
-          // Importamos dinámicamente para no cargar módulos si no es necesario
           const { initDB, closeDB, STORES } = await import('./services/database');
 
-          // --- PASO 1: VERIFICACIÓN SUAVE (SOFT CHECK) ---
-          // Intentamos obtener la instancia. initDB() internamente ya verifica isConnectionValid.
-          // Si la conexión está sana, esto devuelve la instancia inmediatamente sin cerrar nada.
+          // --- PASO 1 y 2: VERIFICACIÓN NORMAL ---
           const dbInstance = await initDB();
 
-          // --- PASO 2: PING DE SALUD (HEALTH CHECK) ---
-          // A veces la instancia existe pero está "congelada". Hacemos una lectura trivial.
-          // Usamos una promesa con timeout para no quedarnos esperando eternamente.
           const healthCheckPromise = new Promise((resolve, reject) => {
             try {
+              // ... (tu código existente del healthCheckPromise)
               const tx = dbInstance.transaction([STORES.MENU], 'readonly');
               const store = tx.objectStore(STORES.MENU);
-              // Leemos algo ligero o simplemente contamos (count es muy rápido)
               const request = store.count();
-
               request.onsuccess = () => resolve(true);
               request.onerror = () => reject(new Error("PING_FAILED"));
-
-              // Si tarda más de 2 seg, asumimos que la conexión está muerta
               setTimeout(() => reject(new Error("PING_TIMEOUT")), 2000);
             } catch (e) {
               reject(e);
@@ -160,54 +153,49 @@ function App() {
 
           await healthCheckPromise;
           Logger.log("✅ Conexión a BD verificada y activa.");
+          dbIsHealthy = true; // Marcar como saludable
 
         } catch (error) {
           Logger.warn("⚠️ Conexión inestable detectada:", error.message);
           Logger.log("🔄 Ejecutando reinicio forzado de BD...");
 
-          // --- PASO 3: REINICIO FORZADO (SOLO SI FALLÓ LO ANTERIOR) ---
+          // --- PASO 3: REINICIO FORZADO ---
           try {
             const { closeDB, initDB } = await import('./services/database');
-
-            // 1. Cerramos explícitamente porque confirmamos que está rota
             closeDB();
-
-            // 2. Esperamos un momento para que el navegador libere el lock
             await new Promise(r => setTimeout(r, 500));
-
-            // 3. Re-iniciamos desde cero
             await initDB();
             Logger.log("✅ BD recuperada exitosamente tras reinicio.");
+            dbIsHealthy = true; // Recuperación exitosa
           } catch (retryError) {
             Logger.error("💥 Error crítico recuperando BD:", retryError);
-            // Último recurso: si todo falla, sugerir recarga al usuario o forzarla
+            dbIsHealthy = false; // Falló definitivamente
+
+            // Opcional: Forzar recarga si la BD está muerta
             // window.location.reload(); 
           }
         }
 
-        // --- RESTAURACIÓN DE SERVICIOS (LÓGICA EXISTENTE) ---
-        // Verificamos estado de la app antes de reiniciar servicios realtime
-        if (appStatus === 'ready') {
+        // --- RESTAURACIÓN DE SERVICIOS ---
+        // SOLO ejecutar si la BD está saludable
+        if (appStatus === 'ready' && dbIsHealthy) { // <--- AQUÍ ESTÁ EL CAMBIO CLAVE
           const { licenseDetails, realtimeSubscription } = useAppStore.getState();
 
-          // Solo reiniciamos el listener de seguridad si tenemos licencia y no hay subscripción activa
           if (licenseDetails?.license_key && !realtimeSubscription) {
-            Logger.log("📡 Reactivando servicios de seguridad...");
-            stopRealtimeSecurity(); // Por precaución
+            stopRealtimeSecurity();
             startRealtimeSecurity();
           }
 
-          // Validación de sesión tras inactividad prolongada (existente)
           const lastActive = sessionStorage.getItem('lanzo_last_active');
           const now = Date.now();
-          if (!lastActive || (now - parseInt(lastActive)) > 300000) { // 5 minutos
+          if (!lastActive || (now - parseInt(lastActive)) > 300000) {
+            // Solo llamamos a esto si dbIsHealthy es true
             useAppStore.getState().verifySessionIntegrity().catch(Logger.warn);
           }
         }
 
         isReconnecting = false;
       } else {
-        // Cuando se oculta, guardamos timestamp para calcular inactividad después
         sessionStorage.setItem('lanzo_last_active', Date.now().toString());
       }
     };
@@ -267,7 +255,7 @@ function App() {
           <SetupModal />
         </ErrorBoundary>
       );
-    
+
     case 'locked_renewal':
       return (
         <ErrorBoundary>
@@ -283,9 +271,9 @@ function App() {
           <ReconnectionBanner />
           {pendingTermsUpdate && (
             <TermsAndConditionsModal
-            isOpen={true}
-            onClose={clearTermsNotification}
-            isUpdateNotification={true}
+              isOpen={true}
+              onClose={clearTermsNotification}
+              isUpdateNotification={true}
             />
           )}
           <NavigationGuard />
