@@ -23,6 +23,8 @@ function Layout() {
   const licenseDetails = useAppStore(state => state.licenseDetails);
   const initializeApp = useAppStore(state => state.initializeApp);
 
+  const showAssistantBot = useAppStore(state => state.showAssistantBot);
+
   useEffect(() => {
     Logger.log("🚀 Inicializando Stores modulares...");
     loadStats();
@@ -81,7 +83,7 @@ function Layout() {
       <DataSafetyModal />
       <BackupReminder />
       <InstallPrompt /> 
-      <AssistantBot />
+      {showAssistantBot && <AssistantBot />}
 
     </div>
   );
