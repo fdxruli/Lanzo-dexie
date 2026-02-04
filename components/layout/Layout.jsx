@@ -12,9 +12,8 @@ import { Toaster } from 'react-hot-toast';
 import { useAppStore } from '../../store/useAppStore';
 import './Layout.css';
 import Logger from '../../services/Logger';
-
-// 1. IMPORTA EL COMPONENTE AQUÍ
 import InstallPrompt from '../common/InstallPrompt'; 
+import AssistantBot from '../common/AssistantBot';
 
 function Layout() {
   const loadStats = useStatsStore(state => state.loadStats);
@@ -81,9 +80,8 @@ function Layout() {
       <MessageModal />
       <DataSafetyModal />
       <BackupReminder />
-
-      {/* 2. AGRÉGALO AQUÍ AL FINAL (Discreto pero accesible globalmente) */}
       <InstallPrompt /> 
+      <AssistantBot />
 
     </div>
   );
