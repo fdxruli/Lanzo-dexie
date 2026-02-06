@@ -1,0 +1,300 @@
+/* src/components/customers/LayawayModal.css */
+
+/* --- Layout del Modal Ampliado --- */
+.modal-content.layaway-modal-content {
+  max-width: 900px; /* Más ancho para ver mejor los detalles */
+  width: 95%;
+  height: 85vh; /* Ocupa buena altura de pantalla */
+  display: flex;
+  flex-direction: column;
+  padding: 0; /* Quitamos padding general para que el header/footer toquen bordes */
+  background-color: var(--background-color); /* Fondo base del tema */
+  border: 1px solid var(--border-color);
+}
+
+.modal-header {
+  padding: var(--spacing-md) var(--spacing-lg);
+  background-color: var(--card-background-color);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.modal-title {
+  margin: 0;
+  color: var(--text-dark);
+}
+
+.layaway-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--spacing-lg);
+  background-color: var(--background-color);
+}
+
+/* --- Estado Vacío --- */
+.layaway-empty-state {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-light);
+  gap: var(--spacing-md);
+  opacity: 0.7;
+}
+
+/* --- Tarjeta de Apartado (Estilo Integrado) --- */
+.layaway-card {
+  background-color: var(--card-background-color);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  margin-bottom: var(--spacing-lg);
+  box-shadow: var(--box-shadow);
+  overflow: hidden; /* Para que el borde redondeado corte el contenido */
+  transition: var(--transition);
+}
+
+.layaway-card:hover {
+  box-shadow: var(--box-shadow-lg);
+  border-color: var(--secondary-color);
+}
+
+/* Encabezado de la Tarjeta */
+.layaway-card-header {
+  padding: var(--spacing-md);
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background-color: var(--light-background); /* Diferencia sutil del cuerpo */
+}
+
+.layaway-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.layaway-date {
+  font-weight: 600;
+  color: var(--text-dark);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.layaway-id {
+  font-size: 0.85rem;
+  font-family: monospace;
+  color: var(--text-light);
+}
+
+.layaway-status-badge {
+  padding: 6px 12px;
+  border-radius: 20px;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.layaway-status-badge.ready {
+  background-color: rgba(0, 196, 140, 0.2);
+  color: var(--success-color);
+  border: 1px solid var(--success-color);
+}
+
+.layaway-status-badge.pending {
+  background-color: rgba(255, 184, 0, 0.2);
+  color: var(--warning-color);
+  border: 1px solid var(--warning-color);
+}
+
+/* --- Cuerpo de la Tarjeta (Productos) --- */
+.layaway-card-body {
+  padding: var(--spacing-md);
+}
+
+/* Tabla de Productos */
+.layaway-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95rem;
+  margin-bottom: var(--spacing-md);
+}
+
+.layaway-items-table th {
+  text-align: left;
+  padding: 8px;
+  color: var(--text-light);
+  font-weight: 600;
+  border-bottom: 2px solid var(--border-color);
+  font-size: 0.85rem;
+  text-transform: uppercase;
+}
+
+.layaway-items-table td {
+  padding: 10px 8px;
+  border-bottom: 1px solid var(--border-color);
+  color: var(--text-color);
+}
+
+.layaway-items-table tr:last-child td {
+  border-bottom: none;
+}
+
+.item-name {
+  font-weight: 500;
+  color: var(--text-dark);
+}
+
+.item-variant {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--secondary-color);
+  margin-top: 2px;
+}
+
+/* --- Sección Financiera y Progreso --- */
+.layaway-financial-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  background-color: var(--light-background);
+  padding: var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+}
+
+.financial-summary {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-bottom: 8px;
+}
+
+.finance-block {
+  text-align: right;
+}
+
+.finance-label {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text-light);
+  margin-bottom: 2px;
+}
+
+.finance-value {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: var(--text-dark);
+}
+
+.finance-value.debt {
+  color: var(--error-color);
+}
+
+.finance-value.paid {
+  color: var(--success-color);
+}
+
+.finance-value.total {
+  color: var(--primary-color);
+  font-size: 1.3rem;
+}
+
+/* Barra de Progreso */
+.progress-container {
+  height: 10px;
+  background-color: var(--border-color);
+  border-radius: 5px;
+  overflow: hidden;
+  width: 100%;
+}
+
+.progress-fill {
+  height: 100%;
+  transition: width 0.5s ease-out;
+}
+
+.progress-fill.ready { background-color: var(--success-color); }
+.progress-fill.pending { background-color: var(--primary-color); }
+
+/* --- Footer de Acciones --- */
+.layaway-card-footer {
+  padding: var(--spacing-md);
+  border-top: 1px solid var(--border-color);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  flex-wrap: wrap;
+  background-color: var(--card-background-color);
+}
+
+/* Grupo de Abono */
+.payment-input-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.input-with-icon {
+  position: relative;
+  display: flex;
+  align-items: center;
+  max-width: 150px;
+}
+
+.input-currency-symbol {
+  position: absolute;
+  left: 10px;
+  color: var(--text-light);
+  font-weight: 600;
+  z-index: 2;
+}
+
+.payment-input-modern {
+  padding-left: 25px !important; /* Espacio para el $ */
+  font-weight: 600;
+  color: var(--text-dark);
+  border: 1px solid var(--border-color);
+  background-color: var(--background-color);
+}
+
+.payment-input-modern:focus {
+  border-color: var(--primary-color);
+  background-color: var(--card-background-color);
+}
+
+/* Botones */
+.btn-icon-text {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  .layaway-card-footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .payment-input-group {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .input-with-icon {
+    max-width: 100%;
+    flex: 1;
+  }
+  
+  .finance-summary {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+}

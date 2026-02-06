@@ -1,76 +1,125 @@
 // src/components/customers/CustomerCard.jsx
 import React, { memo } from 'react';
+import { 
+    Edit, 
+    Trash2, 
+    History, 
+    MessageCircle, 
+    Wallet, 
+    Phone, 
+    MapPin, 
+    AlertCircle,
+    Package // <-- Nuevo icono importado
+} from 'lucide-react';
 
-// Envolvemos el componente en 'memo' para evitar re-renderizados innecesarios
 const CustomerCard = memo(({ 
     customer, 
-    isWhatsAppLoading, // Recibimos el booleano ya calculado (true/false)
+    isWhatsAppLoading, 
     onEdit, 
     onDelete, 
     onViewHistory, 
     onAbonar, 
-    onWhatsApp 
+    onWhatsApp,
+    onViewLayaways // <-- Nuevo prop
 }) => {
     
-    const hasDebt = customer.debt && customer.debt > 0;
+    const hasDebt = (customer.debt || 0) > 0;
 
     return (
         <div className={`customer-card ${hasDebt ? 'has-debt' : ''}`}>
-            <div className="customer-info">
-                <h4>{customer.name}</h4>
-                <p><strong>Teléfono:</strong> {customer.phone}</p>
-                <p><strong>Dirección:</strong> {customer.address}</p>
+            {/* ... (Encabezado se mantiene igual) ... */}
+            <div className="customer-content">
+                <div className="customer-header">
+                    <h4 className="customer-name">{customer.name}</h4>
+                    {hasDebt && (
+                        <div className="debt-badge">
+                            <AlertCircle size={14} />
+                            <span>Deuda: ${customer.debt.toFixed(2)}</span>
+                        </div>
+                    )}
+                </div>
 
-                {hasDebt && (
-                    <p className="customer-debt">
-                        <strong>Deuda:</strong> ${customer.debt.toFixed(2)}
+                <div className="customer-details">
+                    <p title="Teléfono">
+                        <Phone size={16} className="icon-muted" /> 
+                        <span>{customer.phone || 'Sin teléfono'}</span>
                     </p>
-                )}
+                    <p title="Dirección">
+                        <MapPin size={16} className="icon-muted" /> 
+                        <span className="address-text">{customer.address || 'Sin dirección'}</span>
+                    </p>
+                </div>
             </div>
 
-            <div className="customer-actions">
-                {hasDebt && (
-                    <button
-                        className="btn btn-abono"
-                        onClick={() => onAbonar(customer)}
-                    >
-                        Abonar
-                    </button>
-                )}
+            {/* Acciones */}
+            <div className="customer-actions-container">
+                
+                {/* Acciones Primarias */}
+                <div className="actions-primary">
+                    {hasDebt && (
+                        <button
+                            className="btn btn-abono"
+                            onClick={() => onAbonar(customer)}
+                        >
+                            <Wallet size={18} />
+                            <span>Abonar</span>
+                        </button>
+                    )}
 
-                {customer.phone && (
+                    {/* NUEVO BOTÓN DE APARTADOS */}
                     <button
-                        className="btn btn-whatsapp"
-                        title={hasDebt ? "Enviar recordatorio" : "Chat"}
-                        onClick={() => onWhatsApp(customer)}
-                        disabled={isWhatsAppLoading}
+                        className="btn btn-secondary"
+                        style={{ backgroundColor: '#e3f2fd', color: '#1565c0', border: 'none' }}
+                        onClick={() => onViewLayaways(customer)}
+                        title="Ver apartados activos"
                     >
-                        {/* Aquí usamos el booleano directo */}
-                        {isWhatsAppLoading ? '...' : (hasDebt ? 'Cobrar' : 'Chat')}
+                        <Package size={18} />
+                        <span>Apartados</span>
                     </button>
-                )}
 
-                <button
-                    className="btn btn-history"
-                    onClick={() => onViewHistory(customer)}
-                >
-                    Historial
-                </button>
-                <button className="btn btn-edit" onClick={() => onEdit(customer)}>
-                    ✏️
-                </button>
-                <button className="btn btn-delete" onClick={() => onDelete(customer.id)}>
-                    🗑️
-                </button>
+                    {customer.phone && (
+                        <button
+                            className="btn btn-whatsapp"
+                            onClick={() => onWhatsApp(customer)}
+                            disabled={isWhatsAppLoading}
+                        >
+                            <MessageCircle size={18} />
+                            {/* Texto corto para que quepa */}
+                            <span>{isWhatsAppLoading ? '...' : 'Chat'}</span>
+                        </button>
+                    )}
+                </div>
+
+                {/* Acciones Secundarias */}
+                <div className="actions-secondary">
+                    <button
+                        className="btn-icon-text"
+                        onClick={() => onViewHistory(customer)}
+                        title="Ver historial"
+                    >
+                        <History size={16} />
+                    </button>
+                    
+                    <button 
+                        className="btn-icon-text info" 
+                        onClick={() => onEdit(customer)}
+                        title="Editar"
+                    >
+                        <Edit size={16} />
+                    </button>
+                    
+                    <button 
+                        className="btn-icon-text danger" 
+                        onClick={() => onDelete(customer.id)}
+                        title="Borrar"
+                    >
+                        <Trash2 size={16} />
+                    </button>
+                </div>
             </div>
         </div>
     );
 }, (prevProps, nextProps) => {
-    // Optimización adicional (opcional):
-    // React.memo hace esto automáticamente, pero aquí explicamos la lógica:
-    // Solo re-renderizar SI:
-    // 1. El objeto cliente cambió (ej. deuda nueva)
-    // 2. O el estado de loading de ESTA tarjeta cambió
     return (
         prevProps.customer === nextProps.customer &&
         prevProps.isWhatsAppLoading === nextProps.isWhatsAppLoading
