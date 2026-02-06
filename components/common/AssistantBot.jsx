@@ -343,7 +343,11 @@ const AssistantBot = () => {
 
   const handleQuickAction = (action) => {
     setIsOpen(false);
-    navigate(action.path);
+    // Usamos setTimeout para asegurar que la navegación ocurra 
+    // en el siguiente ciclo de renderizado, evitando bloqueos.
+    setTimeout(() => {
+      navigate(action.path);
+    }, 0);
   };
 
   // ===================================================================
@@ -420,7 +424,7 @@ const AssistantBot = () => {
                   Asistente IA
                 </>
               ) : (
-                showGlobalAlert ? "Importante" : `${context?.title}`
+                showGlobalAlert ? "Importante" : (context?.title || 'Lanzo Bot')
               )}
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
