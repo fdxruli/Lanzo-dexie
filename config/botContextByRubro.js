@@ -19,15 +19,9 @@ export const foodServiceContext = {
       ],
       actions: [
         { label: "Ver Cocina (KDS)", path: "/pedidos", icon: "" },
-        { label: "Revisar Menú", path: "/productos", icon: "" }
-      ]
-    },
-    withCart: {
-      title: "Registrando Orden",
-      message: (data) => `Mesa/Cliente: ${data.cartCount} platillo${data.cartCount > 1 ? 's' : ''} | Total: $${data.cartTotal.toFixed(2)}`,
-      tips: [
-        "Revisa modificadores antes de enviar a cocina",
-        "Presiona 'Espacio' o 'Enter' para procesar rápido"
+        { label: "Revisar Menú", path: "/productos", icon: "" },
+        { label: "Ver Ingredientes", path: "/productos?tab=ingredients", icon: "" },
+        { label: "Crear Platillo", path: "/productos?tab=add", icon: "" }
       ]
     }
   },
@@ -41,8 +35,8 @@ export const foodServiceContext = {
         "Marca ingredientes perecederos con caducidad"
       ],
       actions: [
-        { label: "Ver Ingredientes", path: "/productos?tab=ingredients", icon: "" },
-        { label: "Crear Platillo", path: "/productos?tab=add", icon: "" }
+        { label: "Ver clientes", path: "/clientes", icon: "" },
+        { label: "Ir a configuracion", path: "/configuracion", icon: "" }
       ]
     },
     lowStock: {
@@ -60,9 +54,8 @@ export const foodServiceContext = {
       title: "🍽️ Sistema de Cocina (KDS)",
       message: "Comandas en tiempo real",
       tips: [
-        "Órdenes nuevas suenan automáticamente",
-        "Marca 'Listo' cuando termine el platillo",
-        "Vista 'Producción' muestra preparación paralela"
+        "Prioriza pedidos según hora de llegada",
+        "Marca 'Listo' cuando termine el platillo y confirma 'Entregado' para terminar el pedido"
       ],
       actions: []
     }
@@ -79,7 +72,7 @@ export const pharmacyContext = {
       message: "Caja lista para dispensar medicamentos.",
       tips: [
         "Verifica caducidades antes de vender",
-        "Productos controlados requieren receta médica"
+        "Productos controlados requieren receta médica. el sistema te lo pedira si configuraste el medicamento"
       ],
       actions: [
         { label: "Verificar Caducidades", path: "/ventas?tab=expiration", icon: "" },
@@ -159,7 +152,7 @@ export const apparelContext = {
         "Ofrece apartados si el cliente duda"
       ],
       actions: [
-        { label: "Inventario por Talla", path: "/productos?tab=variants-view", icon: "" },
+        { label: "Inventario por Talla", path: "/productos?tab=variants", icon: "" },
         { label: "Crear Apartado", path: "/clientes", icon: "" }
       ]
     }
@@ -170,11 +163,13 @@ export const apparelContext = {
       title: "Gestión de Inventario - Moda",
       message: "Control de variantes y SKU.",
       tips: [
-        "Usa variantes para control exacto de tallas/colores",
-        "Configura SKU únicos por prenda"
+        "Usa variantes para control exacto de tallas/colores.",
+        "Configura SKU únicos por prenda,",
+        "Ofrece sistema de apartado para asegurar ventas grandes."
       ],
       actions: [
-        { label: "Ver por Tallas", path: "/productos?tab=variants-view", icon: "" }
+        { label: "Ir a clientes", path: "/clientes", icon: "" },
+        //{ label: "Ver Apartados", path: "/clientes?tab=layaway", icon: "" }
       ]
     }
   }

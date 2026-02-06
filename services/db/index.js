@@ -4,6 +4,8 @@ import { productsRepository } from './products';
 import { salesRepository } from './sales';
 import { DatabaseError, DB_ERROR_CODES } from './utils';
 import { fixStockInconsistencies, rebuildDailyStats } from '../maintenance';
+import { layawayRepository } from './layaways';
+import { create } from 'zustand';
 
 // ============================================================
 // EXPORTACIÓN DE CONSTANTES Y CLASES (Compatibilidad 100%)
@@ -80,6 +82,12 @@ export const processBatchDeductions = (deductions) =>
 export const executeSaleTransactionSafe = (sale, deductions) =>
     safeExecute(() => salesRepository.executeSaleTransaction(sale, deductions));
 
+export const layawayRepo = {
+    create: (data, initial) => safeExecute(() => layawayRepository.create(data, initial)),
+    getByCustomer: (custId, active) => safeExecute(() => layawayRepository.getByCustomer(custId, active)),
+    addPayment: (id, amount) => safeExecute(() => layawayRepository.addPayment(id, amount)),
+    getById: (id) => safeExecute(() => layawayRepository.getById(id))
+}
 // ============================================================
 // ALIAS DIRECTOS (Lecturas y Búsquedas)
 // ============================================================

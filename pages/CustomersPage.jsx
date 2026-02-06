@@ -3,7 +3,8 @@ import React, { useState, useEffect } from 'react';
 import CustomerForm from '../components/customers/CustomerForm';
 import CustomerList from '../components/customers/CustomerList';
 import PurchaseHistoryModal from '../components/customers/PurchaseHistoryModal';
-import AbonoModal from '../components/common/AbonoModal';
+import AbonoModal from '../components/customers/AbonoModal';
+import LayawayModal from '../components/customers/LayawayModal';
 import { useCaja } from '../hooks/useCaja';
 import { showMessageModal, sendWhatsAppMessage } from '../services/utils';
 import { useAppStore } from '../store/useAppStore';
@@ -34,6 +35,7 @@ export default function CustomersPage() {
   const [isHistoryModalOpen, setIsHistoryModalOpen] = useState(false);
   const [isAbonoModalOpen, setIsAbonoModalOpen] = useState(false);
   const [whatsAppLoading, setWhatsAppLoading] = useState(null);
+  const [isLayawayModalOpen, setIsLayawayModalOpen] = useState(false);
 
   const { registrarMovimiento, cajaActual } = useCaja();
   const companyName = useAppStore((state) => state.companyProfile?.name || 'Tu Negocio');
@@ -209,10 +211,16 @@ export default function CustomersPage() {
     setIsAbonoModalOpen(true);
   };
 
+  const handleOpenLayaways = (customer) => {
+    setSelectedCustomer(customer);
+    setIsLayawayModalOpen(true);
+  };
+
   const handleCloseModals = () => {
     setSelectedCustomer(null);
     setIsHistoryModalOpen(false);
     setIsAbonoModalOpen(false);
+    setIsLayawayModalOpen(false);
   };
 
   const handleConfirmAbono = async (customer, amount, sendReceipt) => {
@@ -420,6 +428,7 @@ ${itemsString}
             onDelete={handleDeleteCustomer}
             onViewHistory={handleViewHistory}
             onAbonar={handleOpenAbono}
+            onViewLayaways={handleOpenLayaways}
             onWhatsApp={handleWhatsApp}
             onWhatsAppLoading={whatsAppLoading}
           />
@@ -450,6 +459,16 @@ ${itemsString}
         onClose={handleCloseModals}
         onConfirmAbono={handleConfirmAbono}
         customer={selectedCustomer}
+      />
+
+      <LayawayModal
+        show={isLayawayModalOpen}
+        onClose={handleCloseModals}
+        customer={selectedCustomer}
+        onUpdate={() => {
+          // Opcional: Si queremos refrescar algo global al cambiar un apartado
+          // Por ejemplo, si los apartados afectaran la deuda global del cliente (que por ahora no lo hacen, van separados)
+        }}
       />
     </>
   );

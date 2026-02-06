@@ -29,6 +29,7 @@ export const STORES = {
   TRANSACTION_LOG: 'transaction_log',
   SYNC_CACHE: 'sync_cache',
   IMAGES: 'images',
+  LAYAWAYS: 'layaways'
 };
 
 class LanzoDatabase extends Dexie {
@@ -86,7 +87,10 @@ class LanzoDatabase extends Dexie {
       
       // Casos especiales de KeyPath
       [STORES.SYNC_CACHE]: 'key', // Tu código usaba 'key' como primary key
-      [STORES.IMAGES]: 'id'       // Almacenamiento de Blobs
+      [STORES.IMAGES]: 'id',       // Almacenamiento de Blobs
+
+      // Esquema de apartados 
+      [STORES.LAYAWAYS]: 'id, customerId, status, deadline, [customerId+status]'
     });
     
     // Middleware (Hooks) Opcional: 

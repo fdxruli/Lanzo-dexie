@@ -55,6 +55,26 @@ export default function ProductsPage() {
         refreshData();
     }, []);
 
+    useEffect(() => {
+        const currentTabParam = searchParams.get('tab');
+
+        const paramToTabMap = {
+            'add': 'add-product',
+            'ingredients': 'ingredients',
+            'batches': 'batches',
+            'categories': 'categories',
+            'variants': 'variants-view',
+            'list': 'view-products'
+        };
+
+        if (currentTabParam && paramToTabMap[currentTabParam]) {
+            setActiveTab(paramToTabMap[currentTabParam]);
+        } else {
+            // Si no hay param o no coincide, volver a default
+            setActiveTab('view-products');
+        }
+    }, [searchParams]);
+
     const handleTabChange = (tabKey) => {
         const urlMap = {
             'add-product': 'add',

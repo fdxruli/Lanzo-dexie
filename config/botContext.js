@@ -1,22 +1,39 @@
-// src/utils/botContext.js
 // Configuración de contextos del bot según la ruta actual
+import { RUBRO_CONTEXTS, abarrotesContext } from './botContextByRubro'
+
+
+const getPageKey = (pathname) => {
+  if (pathname === '/' || pathname.startsWith('/pos')) return 'pos';
+  if (pathname.startsWith('/productos')) return 'productos';
+  if (pathname.startsWith('/ventas')) return 'ventas'; // O dashboard
+  if (pathname.startsWith('/pedidos')) return 'pedidos';
+  return 'default';
+};
 
 // 1. Definir la Alerta Global que falta
 export const GLOBAL_ALERT = {
-  active: false, // Cambiar a true si hay un mensaje urgente
-  id: 'maintenance_01',
-  message: 'El sistema está operando con normalidad.',
-  actionLink: null
+  active: true, // Cambiar a true si hay un mensaje urgente
+  id: 'actualizacion_01',
+  message: 'El sistema ha tenido una actualizacion considerable. Si notas que los precios o stock no cuadran. Dirigete a la seccion de configuracion > Datos y mantenimiento y ejecuta los dos primeros botones.',
+  actionLink: '/configuracion?tab=maintenance'
 };
 
 // 2. Función para obtener acciones rápidas (solicitada por AssistantBot)
-export const getQuickActions = (pathname, rubroType = 'general') => {
-  // Retornamos acciones genéricas si no hay lógica específica
+export const getQuickActions = (pathname, rubroType = 'abarrotes') => {
+  // Intentar buscar en la config específica
+  const rubroConfig = RUBRO_CONTEXTS[rubroType] || RUBRO_CONTEXTS['abarrotes'];
+  const pageKey = getPageKey(pathname);
+
+  if (rubroConfig[pageKey]?.default?.actions) {
+    return rubroConfig[pageKey].default.actions;
+  }
+
+  // Fallback genérico
   return [
-    { label: '📦 Productos', path: '/products', icon: '📦' },
-    { label: '💰 Caja', path: '/pos', icon: '💰' },
-    { label: '👥 Clientes', path: '/customers', icon: '👥' },
-    { label: '📊 Reportes', path: '/reports', icon: '📊' }
+    { label: 'Productos', path: '/productos', icon: '' },
+    { label: 'Caja', path: '/caja', icon: '' },
+    { label: 'Clientes', path: '/clientes', icon: '' },
+    { label: 'Reportes', path: '/ventas', icon: '' }
   ];
 };
 
@@ -27,7 +44,41 @@ export const getQuickActions = (pathname, rubroType = 'general') => {
  * @returns {object} - Configuración de contexto para el asistente
  */
 export const getBotContext = (pathname, data = {}) => {
-  const { cart = [], stats = {}, products = [] } = data;
+  const { cart = [], stats = {}, businessType = [] } = data;
+
+  // 1. Identificar el rubro del negocio (asume que businessType es un array, tomamos el primero)
+  // Normalizamos el string para que coincida con las claves de RUBRO_CONTEXTS
+  const currentRubro = businessType.length > 0 ? businessType[0].toLowerCase() : 'abarrotes';
+
+  // 2. Obtener la configuración del rubro o usar abarrotes por defecto
+  const contextConfig = RUBRO_CONTEXTS[currentRubro] || RUBRO_CONTEXTS['abarrotes'] || abarrotesContext;
+
+  // 3. Identificar la página actual
+  const pageKey = getPageKey(pathname);
+
+  // 4. Buscar configuración específica para esta página
+  const pageConfig = contextConfig[pageKey];
+
+  if (pageConfig) {
+    // Lógica para estados específicos (ej. "withCart" si hay cosas en el carrito)
+    if (pageKey === 'pos' && cart.length > 0 && pageConfig.withCart) {
+      const stateConfig = pageConfig.withCart;
+      return {
+        ...stateConfig,
+        // Si el mensaje es una función, la ejecutamos con data
+        message: typeof stateConfig.message === 'function' ? stateConfig.message(data) : stateConfig.message
+      };
+    }
+
+    // Estado por defecto de la página específica del rubro
+    if (pageConfig.default) {
+      const stateConfig = pageConfig.default;
+      return {
+        ...stateConfig,
+        message: typeof stateConfig.message === 'function' ? stateConfig.message(data) : stateConfig.message
+      };
+    }
+  }
 
   // 🏠 PÁGINA PRINCIPAL / PUNTO DE VENTA
   if (pathname === '/' || pathname.startsWith('/pos')) {
@@ -35,88 +86,43 @@ export const getBotContext = (pathname, data = {}) => {
     const hasItems = itemsCount > 0;
 
     return {
-      message: hasItems 
+      message: hasItems
         ? `Tienes ${itemsCount} producto${itemsCount > 1 ? 's' : ''} en el carrito. ¿Necesitas ayuda para finalizar la venta o aplicar descuentos?`
         : 'Estás en el punto de venta. Puedo ayudarte a agregar productos, gestionar el carrito o realizar una venta.',
       actions: [
         {
-          label: '📦 Agregar producto',
-          icon: '📦',
-          route: '/',
+          label: 'Agregar producto',
+          icon: '',
+          path: '/productos',
           highlight: false
         },
         {
-          label: '🎫 Vender fiado',
-          icon: '🎫',
-          route: '/customers',
+          label: 'Ver clientes',
+          icon: '',
+          path: '/clientes',
           highlight: false
         },
         {
-          label: '💰 Ver corte de caja',
-          icon: '💰',
-          route: '/reports',
+          label: 'Ver corte de caja',
+          icon: '',
+          path: '/caja',
           highlight: false
         },
         {
-          label: '📊 Ver estadísticas',
-          icon: '📊',
-          route: '/dashboard',
+          label: 'Ver estadísticas',
+          icon: '',
+          path: '/ventas',
           highlight: false
         }
       ],
       tips: [
         'Usa el escáner de código de barras para agregar productos rápidamente',
-        'Presiona F2 para buscar un producto por nombre',
-        'Usa descuentos porcentuales o fijos desde el carrito'
-      ]
-    };
-  }
-
-  // 📦 INVENTARIO
-  if (pathname.startsWith('/inventory')) {
-    const lowStockCount = products.filter(p => p.stock < 10).length;
-    const hasLowStock = lowStockCount > 0;
-
-    return {
-      message: hasLowStock
-        ? `⚠️ Tienes ${lowStockCount} producto${lowStockCount > 1 ? 's' : ''} con stock bajo (menos de 10 unidades). ¿Necesitas ayuda para hacer un pedido?`
-        : 'Estás gestionando tu inventario. Puedo ayudarte a agregar productos, ajustar stock o gestionar lotes.',
-      actions: [
-        {
-          label: '➕ Agregar producto',
-          icon: '➕',
-          route: '/inventory/add',
-          highlight: false
-        },
-        {
-          label: '📋 Ver productos con stock bajo',
-          icon: '⚠️',
-          route: '/inventory',
-          highlight: hasLowStock
-        },
-        {
-          label: '🔄 Ajustar inventario',
-          icon: '🔄',
-          route: '/inventory/adjust',
-          highlight: false
-        },
-        {
-          label: '🏷️ Gestionar lotes',
-          icon: '🏷️',
-          route: '/inventory/batches',
-          highlight: false
-        }
-      ],
-      tips: [
-        'Mantén un registro de lotes para productos perecederos',
-        'Usa el ajuste de inventario para corregir diferencias',
-        'Configura alertas de stock mínimo para cada producto'
       ]
     };
   }
 
   // 👥 CLIENTES
-  if (pathname.startsWith('/customers')) {
+  if (pathname.startsWith('/clientes')) {
     const totalDebt = stats.totalDebt || 0;
     const hasDebt = totalDebt > 0;
 
@@ -126,193 +132,113 @@ export const getBotContext = (pathname, data = {}) => {
         : 'Gestiona tus clientes y sus cuentas. Puedo ayudarte a registrar nuevos clientes o revisar cuentas pendientes.',
       actions: [
         {
-          label: '👤 Agregar cliente',
-          icon: '👤',
-          route: '/customers/add',
+          label: 'Ver caja',
+          icon: '',
+          path: '/caja',
           highlight: false
         },
         {
-          label: '💳 Ver cuentas por cobrar',
-          icon: '💳',
-          route: '/customers/debts',
-          highlight: hasDebt
-        },
-        {
-          label: '📝 Registrar abono',
-          icon: '📝',
-          route: '/customers',
-          highlight: false
-        },
-        {
-          label: '📊 Historial de compras',
-          icon: '📊',
-          route: '/customers',
+          label: 'Historial de ventas',
+          icon: '',
+          path: '/ventas?tab=history',
           highlight: false
         }
       ],
       tips: [
         'Establece límites de crédito para cada cliente',
-        'Envía recordatorios de pago automáticos',
+        'Envía recordatorios de pago',
         'Ofrece descuentos por pronto pago'
       ]
     };
   }
 
-  // 📊 REPORTES
-  if (pathname.startsWith('/reports')) {
-    const todaySales = stats.todaySales || 0;
-    const hasSales = todaySales > 0;
-
-    return {
-      message: hasSales
-        ? `Has vendido $${todaySales.toFixed(2)} hoy. ¿Necesitas generar un reporte o hacer el corte de caja?`
-        : 'Revisa tus reportes de ventas, inventario y finanzas. Puedo ayudarte a generar informes o hacer el corte de caja.',
-      actions: [
-        {
-          label: '💰 Corte de caja',
-          icon: '💰',
-          route: '/reports/cash-close',
-          highlight: hasSales
-        },
-        {
-          label: '📈 Reporte de ventas',
-          icon: '📈',
-          route: '/reports/sales',
-          highlight: false
-        },
-        {
-          label: '📦 Reporte de inventario',
-          icon: '📦',
-          route: '/reports/inventory',
-          highlight: false
-        },
-        {
-          label: '💵 Reporte de utilidad',
-          icon: '💵',
-          route: '/reports/profit',
-          highlight: false
-        }
-      ],
-      tips: [
-        'Haz el corte de caja al final del día',
-        'Compara ventas semanales para identificar tendencias',
-        'Exporta reportes en formato Excel o PDF'
-      ]
-    };
-  }
-
   // ⚙️ CONFIGURACIÓN
-  if (pathname.startsWith('/settings')) {
+  if (pathname.startsWith('/configuracion')) {
     return {
       message: 'Configura tu sistema según las necesidades de tu negocio. ¿Necesitas ayuda con alguna configuración específica?',
       actions: [
         {
-          label: '🏢 Datos de la empresa',
-          icon: '🏢',
-          route: '/settings/company',
+          label: 'Agregar producto',
+          icon: '',
+          path: '/productos?tab=add',
           highlight: false
         },
         {
-          label: '💵 Formas de pago',
-          icon: '💵',
-          route: '/settings/payments',
+          label: 'Caja',
+          icon: '',
+          path: '/caja',
           highlight: false
         },
         {
-          label: '🖨️ Configurar impresora',
-          icon: '🖨️',
-          route: '/settings/printer',
+          label: 'Ver Clientes',
+          icon: '',
+          path: '/clientes',
           highlight: false
         },
         {
-          label: '👤 Usuarios y permisos',
-          icon: '👤',
-          route: '/settings/users',
+          label: 'Acerca de',
+          icon: '',
+          path: '/acerca-de',
           highlight: false
         }
       ],
       tips: [
-        'Configura tu logotipo para que aparezca en tickets',
-        'Define permisos por usuario para mayor seguridad',
-        'Activa el backup automático diario'
+        'Agrega informacion de tu negocio para brindarte servicio mas personalizado.',
+        'Si quieres cambiar informacion de nu negocio contacta a soporte en la seccion de Acerca de',
+        'Realiza respaldo de tu negocio en Datos y Mantenimiento en el boton de "Respaldo y Datos".'
       ]
     };
   }
 
   // 📊 DASHBOARD
-  if (pathname.startsWith('/dashboard')) {
+  if (pathname.startsWith('/ventas')) {
     const topProduct = stats.topProduct || 'N/A';
-    
+
     return {
       message: `Aquí puedes ver un resumen completo de tu negocio. El producto más vendido es: ${topProduct}.`,
       actions: [
         {
-          label: '📈 Ver ventas del mes',
-          icon: '📈',
-          route: '/reports/sales',
+          label: 'Agrega productos',
+          icon: '',
+          path: '/productos?tab=add',
           highlight: false
         },
         {
-          label: '💰 Ver utilidades',
-          icon: '💰',
-          route: '/reports/profit',
-          highlight: false
-        },
-        {
-          label: '📦 Productos más vendidos',
-          icon: '📦',
-          route: '/reports/products',
-          highlight: false
-        },
-        {
-          label: '⚠️ Stock bajo',
-          icon: '⚠️',
-          route: '/inventory',
+          label: 'Ver estado de caja',
+          icon: '',
+          path: '/caja',
           highlight: false
         }
       ],
       tips: [
-        'Revisa el dashboard cada mañana para planificar el día',
-        'Identifica productos de baja rotación para hacer promociones',
-        'Compara métricas con el mes anterior'
+        'Revisa el dashboard para ver tendencias de ventas',
+        'Recive consejos de nuestro BOT. Aprendera de tus datos y te dara consejos utiles. (Aun es experimental)',
       ]
     };
   }
 
-  // 🛒 COMPRAS / PROVEEDORES
-  if (pathname.startsWith('/purchases')) {
+  // 🛒 productos
+  if (pathname.startsWith('/productos')) {
     return {
-      message: 'Gestiona tus compras a proveedores. Puedo ayudarte a registrar nuevas compras o revisar cuentas por pagar.',
+      message: 'Gestiona el inventario de tus productos. Puedo ayudarte a agregar nuevos productos, actualizar existencias o revisar productos con bajo stock.',
       actions: [
         {
-          label: '🛒 Nueva compra',
-          icon: '🛒',
-          route: '/purchases/new',
+          label: 'ir a reportes de ventas',
+          icon: '',
+          path: '/ventas',
           highlight: false
         },
         {
-          label: '👨‍💼 Gestionar proveedores',
-          icon: '👨‍💼',
-          route: '/purchases/suppliers',
-          highlight: false
-        },
-        {
-          label: '💳 Cuentas por pagar',
-          icon: '💳',
-          route: '/purchases/payables',
-          highlight: false
-        },
-        {
-          label: '📊 Historial de compras',
-          icon: '📊',
-          route: '/purchases/history',
+          label: 'ir a configuracion',
+          icon: '',
+          path: '/configuracion',
           highlight: false
         }
       ],
       tips: [
-        'Registra todas tus compras para control de costos',
-        'Negocia mejores precios con proveedores frecuentes',
-        'Mantén un calendario de pagos a proveedores'
+        'Asegurate de revisar productos con bajo stock regularmente.',
+        'Agrega el costo de compra y costo de venta para que tengas metricas mas exactas de tu negocio.',
+        'Para agregar stock a un producto ve a Gestionar de lotes.'
       ]
     };
   }
@@ -324,25 +250,25 @@ export const getBotContext = (pathname, data = {}) => {
       {
         label: ' Ir a punto de venta',
         icon: '',
-        route: '/',
+        path: '/',
         highlight: false
       },
       {
         label: ' Ver inventario',
         icon: '',
-        route: '/inventory',
+        path: '/productos',
         highlight: false
       },
       {
         label: ' Ver clientes',
         icon: '',
-        route: '/customers',
+        path: '/clientes',
         highlight: false
       },
       {
         label: ' Ver reportes',
         icon: '',
-        route: '/reports',
+        path: '/ventas',
         highlight: false
       }
     ],
