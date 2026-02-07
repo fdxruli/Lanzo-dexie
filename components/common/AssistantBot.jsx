@@ -1,263 +1,27 @@
-// src/components/common/AssistantBot.jsx (V3.0 - SÚPER INTELIGENTE)
+// src/components/common/AssistantBot.jsx (V4.0 - INTEGRADO CON INTELLIGENCE)
 
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { getSmartContext, getQuickActions, GLOBAL_ALERT } from '../../config/botContext';
+import { getSmartContext, getQuickActions, GLOBAL_ALERT, getCriticalAlert } from '../../config/botContext';
 import {
   X, Wrench, AlertTriangle, ExternalLink, Send,
-  Sparkles, HelpCircle, TrendingUp, Package, Users,
-  DollarSign, Calendar, BarChart3, Lightbulb
+  Sparkles, HelpCircle, Lightbulb,
 } from 'lucide-react';
 import './AssistantBot.css';
 
-// --- STORES PARA INTELIGENCIA ---
+// --- STORES ---
 import { useOrderStore } from '../../store/useOrderStore';
 import { useProductStore } from '../../store/useProductStore';
 import { useAppStore } from '../../store/useAppStore';
-import { useSalesStore } from '../../store/useSalesStore';
 import { useStatsStore } from '../../store/useStatsStore';
-import { STORES, loadData } from '../../services/database';
 
-// ===================================================================
-// 🧠 MOTOR DE INTELIGENCIA ARTIFICIAL DEL ASISTENTE
-// ===================================================================
-
-const AI_KNOWLEDGE_BASE = {
-  // Preguntas Frecuentes sobre Funcionalidades
-  funcionalidades: {
-    triggers: ['cómo', 'como', 'puedo', 'hacer', 'función', 'funciona', 'usar'],
-    responses: {
-      'agregar producto': {
-        keywords: ['agregar', 'añadir', 'crear', 'nuevo', 'producto'],
-        answer: 'Para agregar un producto: Ve a **Productos** → **Añadir Producto** → Completa los datos básicos (nombre, precio, costo) → Guarda.',
-        action: { label: 'Ir a Productos', path: '/productos?tab=add', icon: '' }
-      },
-      'vender fiado': {
-        keywords: ['fiado', 'crédito', 'fiar', 'deuda'],
-        answer: 'Para vender fiado: Agrega productos al carrito → **Cobrar** → Selecciona método "Fiado" → Busca/crea el cliente → El saldo se guardará automáticamente.',
-        action: { label: 'Ver Clientes', path: '/clientes', icon: '' }
-      },
-      'gestionar lotes': {
-        keywords: ['lote', 'batch', 'caducidad', 'fifo', 'variante'],
-        answer: 'Los lotes permiten control FIFO, fechas de caducidad y SKUs únicos. Ve a **Productos** → **Gestionar Lotes** para configurar.',
-        action: { label: 'Ir a Lotes', path: '/productos?tab=batches', icon: '' }
-      },
-      'corte de caja': {
-        keywords: ['corte', 'caja', 'turno', 'cerrar', 'auditar'],
-        answer: 'El corte de caja te permite auditar el efectivo del día. Ve a **Caja** → **Corte de Caja**, ingresa el efectivo físico contado, y el sistema calculará la diferencia.',
-        action: { label: 'Ir a Caja', path: '/caja', icon: '' }
-      },
-      'backup': {
-        keywords: ['respaldo', 'backup', 'copia', 'exportar', 'guardar'],
-        answer: '**IMPORTANTE**: Tus datos están en este dispositivo. Haz respaldos semanales: **Configuración** → **Datos y Mantenimiento** → **Descargar Respaldo**.',
-        action: { label: 'Ir a Configuración', path: '/configuracion?tab=maintenance', icon: '' }
-      },
-      'mayoreo': {
-        keywords: ['mayoreo', 'wholesale', 'descuento', 'cantidad'],
-        answer: 'Configura precios por volumen: Edita un producto → Activa "Precios de Mayoreo" → Define cantidad mínima y precio especial.',
-        action: { label: 'Ver Productos', path: '/productos', icon: '' }
-      },
-      'recetas': {
-        keywords: ['receta', 'platillo', 'ingrediente', 'cocina', 'kds'],
-        answer: 'Para platillos con ingredientes: Crea el producto → Activa "Es una receta" → Agrega ingredientes/insumos → El sistema descontará automáticamente del inventario.',
-        action: { label: 'Crear Platillo', path: '/productos?tab=add', icon: '' }
-      }
-    }
-  },
-
-  // Problemas Comunes y Soluciones
-  problemas: {
-    triggers: ['error', 'problema', 'no funciona', 'falla', 'ayuda'],
-    solutions: {
-      'stock negativo': {
-        keywords: ['stock', 'negativo', 'inventario', 'inconsistencia'],
-        answer: '⚠️ Si ves stock negativo, ve a **Configuración** → **Datos y Mantenimiento** → **Sincronizar Stock** para corregirlo automáticamente.',
-        severity: 'high'
-      },
-      'diferencia en caja': {
-        keywords: ['diferencia', 'caja', 'dinero', 'falta', 'sobra'],
-        answer: 'Las diferencias pueden ser por: ventas no registradas, gastos no anotados, o errores al contar. Revisa los movimientos en **Caja** → **Historial**.',
-        severity: 'medium'
-      },
-      'producto no aparece': {
-        keywords: ['no aparece', 'no veo', 'perdido', 'desaparecido'],
-        answer: 'Verifica: 1) ¿Está activo? (puede estar desactivado), 2) ¿Está en la categoría correcta?, 3) Intenta buscarlo por código de barras.',
-        severity: 'low'
-      }
-    }
-  },
-
-  // Consejos de Negocio
-  consejos: {
-    triggers: ['consejo', 'recomendación', 'sugerencia', 'tip'],
-    tips: [
-      {
-        titulo: '💡 Control de Costos',
-        mensaje: 'Revisa el margen de utilidad de tus productos más vendidos. Si es menor al 30%, considera ajustar precios o negociar con proveedores.',
-        icon: '💰'
-      },
-      {
-        titulo: '📊 Análisis de Inventario',
-        mensaje: 'Productos con rotación lenta ocupan capital. Considera promociones para liquidar stock que lleva más de 3 meses sin venderse.',
-        icon: '📦'
-      },
-      {
-        titulo: '🎯 Fidelización',
-        mensaje: 'Los clientes que compran fiado tienden a ser más leales. Ofrece pequeños descuentos por pago puntual para incentivar.',
-        icon: '👥'
-      },
-      {
-        titulo: '⏰ Horarios de Mayor Venta',
-        mensaje: 'Analiza tus estadísticas por horario. Considera tener más personal o stock en las horas pico.',
-        icon: '📈'
-      }
-    ]
-  }
-};
-
-// ===================================================================
-// 🎯 FUNCIÓN PRINCIPAL DE IA: PROCESAR PREGUNTAS DEL USUARIO
-// ===================================================================
-
-const processUserQuestion = (question, businessData) => {
-  const lowerQuestion = question.toLowerCase();
-
-  // 1. BÚSQUEDA EN BASE DE CONOCIMIENTO
-  for (const [category, config] of Object.entries(AI_KNOWLEDGE_BASE)) {
-    if (category === 'funcionalidades') {
-      for (const [key, info] of Object.entries(config.responses)) {
-        if (info.keywords.some(kw => lowerQuestion.includes(kw))) {
-          return {
-            type: 'answer',
-            message: info.answer,
-            action: info.action,
-            confidence: 'high'
-          };
-        }
-      }
-    }
-
-    if (category === 'problemas') {
-      for (const [key, info] of Object.entries(config.solutions)) {
-        if (info.keywords.some(kw => lowerQuestion.includes(kw))) {
-          return {
-            type: 'solution',
-            message: info.answer,
-            severity: info.severity,
-            confidence: 'high'
-          };
-        }
-      }
-    }
-  }
-
-  // 2. ANÁLISIS CONTEXTUAL INTELIGENTE
-  if (lowerQuestion.includes('vend') || lowerQuestion.includes('gano') || lowerQuestion.includes('utilidad')) {
-    return generateSalesInsight(businessData);
-  }
-
-  if (lowerQuestion.includes('stock') || lowerQuestion.includes('inventario') || lowerQuestion.includes('productos')) {
-    return generateInventoryInsight(businessData);
-  }
-
-  if (lowerQuestion.includes('cliente') || lowerQuestion.includes('deuda')) {
-    return generateCustomerInsight(businessData);
-  }
-
-  // 3. RESPUESTA GENÉRICA CON OPCIONES
-  return {
-    type: 'menu',
-    message: 'No estoy seguro de entender tu pregunta. ¿Te refieres a alguno de estos temas?',
-    options: [
-      { label: 'Gestión de Productos', query: 'cómo agregar productos' },
-      { label: 'Ventas y Caja', query: 'cómo hacer corte de caja' },
-      { label: 'Clientes y Fiado', query: 'cómo vender fiado' },
-      { label: 'Reportes', query: 'cómo ver mis ganancias' }
-    ]
-  };
-};
-
-// ===================================================================
-// 🔍 GENERADORES DE INSIGHTS INTELIGENTES
-// ===================================================================
-
-const generateSalesInsight = (data) => {
-  const { stats } = data;
-  const margen = stats.totalRevenue > 0
-    ? ((stats.totalNetProfit / stats.totalRevenue) * 100).toFixed(1)
-    : 0;
-
-  let message = `📊 **Tu Negocio Hoy:**\n\n`;
-  message += `• Ventas: $${stats.totalRevenue.toFixed(2)}\n`;
-  message += `• Utilidad Neta: $${stats.totalNetProfit.toFixed(2)}\n`;
-  message += `• Margen: ${margen}%\n`;
-  message += `• Pedidos: ${stats.totalOrders}\n\n`;
-
-  if (parseFloat(margen) < 25) {
-    message += `⚠️ Tu margen está bajo. Considera revisar costos o ajustar precios.`;
-  } else if (parseFloat(margen) > 50) {
-    message += `✨ ¡Excelente margen! Tu negocio es rentable.`;
-  }
-
-  return {
-    type: 'insight',
-    message,
-    action: { label: 'Ver Estadísticas Completas', path: '/ventas', icon: '📊' }
-  };
-};
-
-const generateInventoryInsight = (data) => {
-  const { lowStockCount, stats } = data;
-
-  let message = `📦 **Estado de Inventario:**\n\n`;
-  message += `• Valor Total: $${stats.inventoryValue?.toFixed(2) || '0.00'}\n`;
-
-  if (lowStockCount > 0) {
-    message += `• ⚠️ ${lowStockCount} producto${lowStockCount > 1 ? 's' : ''} con stock bajo\n\n`;
-    message += `Revisa la pestaña de **Reabastecimiento** para ver qué productos necesitas comprar.`;
-  } else {
-    message += `• ✅ Todos los productos tienen stock suficiente\n\n`;
-    message += `Tip: Revisa tu inventario semanalmente para evitar faltantes.`;
-  }
-
-  return {
-    type: 'insight',
-    message,
-    action: { label: 'Ver Productos', path: '/productos', icon: '📦' }
-  };
-};
-
-const generateCustomerInsight = async () => {
-  try {
-    const customers = await loadData(STORES.CUSTOMERS);
-    const withDebt = customers?.filter(c => c.debt > 0) || [];
-    const totalDebt = withDebt.reduce((sum, c) => sum + c.debt, 0);
-
-    let message = `👥 **Gestión de Clientes:**\n\n`;
-    message += `• Total Clientes: ${customers?.length || 0}\n`;
-    message += `• Con Deuda: ${withDebt.length}\n`;
-    message += `• Deuda Total: $${totalDebt.toFixed(2)}\n\n`;
-
-    if (withDebt.length > 0) {
-      message += `💡 Tip: Envía recordatorios por WhatsApp desde la lista de clientes para recuperar cartera.`;
-    }
-
-    return {
-      type: 'insight',
-      message,
-      action: { label: 'Ver Clientes', path: '/clientes', icon: '👥' }
-    };
-  } catch (e) {
-    return {
-      type: 'error',
-      message: 'No pude cargar información de clientes en este momento.'
-    };
-  }
-};
-
-// ===================================================================
-// 🎨 COMPONENTE PRINCIPAL DEL ASISTENTE
-// ===================================================================
+// --- NUEVA INTEGRACIÓN DE INTELIGENCIA ---
+import {
+  detectIntent,
+  extractEntities,
+  generateResponse,
+  getProactiveSuggestions // (Opcional) Si quieres sugerencias proactivas
+} from '../../utils/botIntelligence';
 
 const AssistantBot = () => {
   const location = useLocation();
@@ -265,8 +29,8 @@ const AssistantBot = () => {
 
   const [isOpen, setIsOpen] = useState(false);
   const [showGlobalAlert, setShowGlobalAlert] = useState(false);
-  const [chatMode, setChatMode] = useState(false); // Nuevo: Modo conversación
-  const [messages, setMessages] = useState([]); // Historial de chat
+  const [chatMode, setChatMode] = useState(false);
+  const [messages, setMessages] = useState([]);
   const [userInput, setUserInput] = useState('');
   const [isTyping, setIsTyping] = useState(false);
   const chatEndRef = useRef(null);
@@ -279,7 +43,7 @@ const AssistantBot = () => {
   const licenseDetails = useAppStore((state) => state.licenseDetails);
   const companyProfile = useAppStore((state) => state.companyProfile);
 
-  // 2. CÁLCULOS DERIVADOS
+  // 2. CÁLCULOS DERIVADOS Y DATA PARA EL BOT
   const botData = useMemo(() => {
     const lowStockCount = menuProducts.filter(p =>
       p.trackStock && p.isActive && p.stock <= (p.minStock || 0)
@@ -296,33 +60,38 @@ const AssistantBot = () => {
       cartTotal: getTotalPrice(),
       lowStockCount,
       licenseDays,
+      products: menuProducts,
+      license: { daysRemaining: licenseDays },
       businessType: companyProfile?.business_type || [],
       stats
     };
   }, [cartOrder, menuProducts, stats, licenseDetails, getTotalPrice, companyProfile]);
 
-  // 3. OBTENER CONTEXTO INTELIGENTE
+  // 3. OBTENER CONTEXTO INTELIGENTE (Visualización pasiva)
   const context = useMemo(() => {
     return getSmartContext(location.pathname, botData);
   }, [location.pathname, botData]);
 
-  // 4. OBTENER ACCIONES RÁPIDAS
+  // 4. OBTENER ALERTA CRÍTICA
+  const criticalAlert = useMemo(() => {
+    return getCriticalAlert(botData);
+  }, [botData]);
+
+  // 5. OBTENER ACCIONES RÁPIDAS
   const quickActions = useMemo(() => {
     if (context?.actions && context.actions.length > 0) {
       return context.actions;
     }
-
     const rubroType = Array.isArray(botData.businessType)
       ? botData.businessType[0]
       : 'abarrotes';
-
     return getQuickActions(location.pathname, rubroType);
   }, [context, location.pathname, botData.businessType]);
 
   // Auto-scroll del chat
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+  }, [messages, isTyping]);
 
   // Efecto: Auto-abrir si hay alerta global no vista
   useEffect(() => {
@@ -343,77 +112,99 @@ const AssistantBot = () => {
 
   const handleQuickAction = (action) => {
     setIsOpen(false);
-    // Usamos setTimeout para asegurar que la navegación ocurra 
-    // en el siguiente ciclo de renderizado, evitando bloqueos.
     setTimeout(() => {
-      navigate(action.path);
+      // Soporte para ambas propiedades (path o route)
+      const target = action.path || action.route;
+      if (target) navigate(target);
     }, 0);
   };
 
-  // ===================================================================
-  // 🤖 MANEJO DEL CHAT INTELIGENTE
-  // ===================================================================
-
+  // --- LÓGICA DE PROCESAMIENTO NUEVA ---
   const handleSendMessage = async () => {
     if (!userInput.trim()) return;
 
-    const userMessage = { type: 'user', text: userInput, timestamp: Date.now() };
+    const currentInput = userInput;
+    const userMessage = { type: 'user', text: currentInput, timestamp: Date.now() };
+
     setMessages(prev => [...prev, userMessage]);
     setUserInput('');
     setIsTyping(true);
 
-    // Simular delay de "pensamiento" para UX natural
-    await new Promise(resolve => setTimeout(resolve, 800));
+    try {
+      // 1. Detectar intención
+      const intent = detectIntent(currentInput);
 
-    const aiResponse = await processUserQuestion(userInput, botData);
+      // 2. Extraer entidades (fechas, nombres de productos)
+      const entities = extractEntities(currentInput);
 
-    let botMessage = {
-      type: 'bot',
-      timestamp: Date.now(),
-      ...aiResponse
-    };
+      // 3. Generar respuesta usando el motor de inteligencia
+      // Pasamos botData por si se requiere contexto adicional
+      const aiResponse = await generateResponse(intent, entities, botData);
 
-    setMessages(prev => [...prev, botMessage]);
-    setIsTyping(false);
+      // 4. Formatear para el chat
+      const botMessage = {
+        type: 'bot',
+        timestamp: Date.now(),
+        // Mapeamos la estructura de botIntelligence a lo que usa el render
+        title: aiResponse.title,
+        message: aiResponse.message,
+        tips: aiResponse.tips || [],
+        actions: aiResponse.actions || [], // Ahora es un array
+        options: aiResponse.options || [] // Por si devuelve opciones de menú
+      };
+
+      setMessages(prev => [...prev, botMessage]);
+    } catch (error) {
+      console.error("Error en bot intelligence:", error);
+      setMessages(prev => [...prev, {
+        type: 'bot',
+        message: 'Tuve un error procesando tu solicitud. Por favor intenta de nuevo.',
+        timestamp: Date.now()
+      }]);
+    } finally {
+      setIsTyping(false);
+    }
   };
 
   const handleSuggestedQuestion = (query) => {
     setUserInput(query);
-    handleSendMessage();
+    // Usamos setTimeout para asegurar que el estado se actualice antes de enviar
+    setTimeout(() => {
+      // Truco: llamamos a una función interna o forzamos el evento, 
+      // pero como handleSendMessage usa el estado userInput, 
+      // a veces es mejor pasar el texto directamente.
+      // Aquí ajustaré handleSendMessage para aceptar argumentos opcionales o 
+      // simplemente simulamos el flujo:
+      document.querySelector('.send-btn')?.click();
+    }, 100);
   };
 
-  const handleRandomTip = () => {
-    const tips = AI_KNOWLEDGE_BASE.consejos.tips;
-    const randomTip = tips[Math.floor(Math.random() * tips.length)];
-
-    setMessages(prev => [...prev, {
-      type: 'bot',
-      message: `${randomTip.titulo}\n\n${randomTip.mensaje}`,
-      timestamp: Date.now()
-    }]);
-  };
+  // Ajuste para que handleSuggestedQuestion funcione mejor:
+  // (Alternativa: Modificar handleSendMessage para aceptar texto opcional)
+  /*
+  const triggerMessage = (text) => {
+      setUserInput(text);
+      // ... lógica de envío inmediata ...
+  }
+  */
 
   const botRef = useRef(null);
 
-  // Agrega este useEffect
   useEffect(() => {
     const handleClickOutside = (event) => {
-      // Si está abierto, y el clic no fue dentro del bot ni en el botón de avatar
       if (isOpen && botRef.current && !botRef.current.contains(event.target)) {
         setIsOpen(false);
       }
     };
-
     document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
+    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isOpen]);
+
+  const hasActiveAlert = showGlobalAlert || (criticalAlert && criticalAlert.severity === 'critical');
 
   return (
     <div ref={botRef} className={`lanzo-bot-container ${isOpen ? 'open' : 'closed'}`}>
 
-      {/* GLOBO DE MENSAJE */}
       {isOpen && (
         <div className="lanzo-bot-card animate-pop-in">
           <div className="bot-header">
@@ -424,7 +215,9 @@ const AssistantBot = () => {
                   Asistente IA
                 </>
               ) : (
-                showGlobalAlert ? "Importante" : (context?.title || 'Lanzo Bot')
+                showGlobalAlert ? "Importante" :
+                  criticalAlert ? "Atención Requerida" :
+                    (context?.title || 'Lanzo Bot')
               )}
             </span>
             <div style={{ display: 'flex', gap: '8px' }}>
@@ -445,7 +238,6 @@ const AssistantBot = () => {
 
           <div className="bot-body">
             {showGlobalAlert ? (
-              // --- ALERTA GLOBAL ---
               <div className="alert-content">
                 <p className="alert-text">{GLOBAL_ALERT.message}</p>
                 {GLOBAL_ALERT.actionLink && (
@@ -465,26 +257,23 @@ const AssistantBot = () => {
                 </button>
               </div>
             ) : chatMode ? (
-              // --- MODO CHAT IA ---
+              // --- MODO CHAT IA (Actualizado) ---
               <div className="chat-container">
                 <div className="chat-messages">
                   {messages.length === 0 ? (
                     <div className="chat-welcome">
                       <Sparkles size={32} style={{ color: 'var(--primary-color)' }} />
                       <h4>¡Hola! Soy tu asistente inteligente</h4>
-                      <p>Pregúntame cualquier cosa sobre tu negocio:</p>
+                      <p>Puedo analizar tus ventas, inventario y más. Intenta con:</p>
                       <div className="suggested-questions">
-                        <button onClick={() => handleSuggestedQuestion('¿Cuánto he vendido?')}>
-                          ¿Cuánto he vendido?
+                        <button onClick={() => setUserInput('¿Cuánto he vendido hoy?')}>
+                          ¿Cuánto he vendido hoy?
                         </button>
-                        <button onClick={() => handleSuggestedQuestion('¿Cómo agregar productos?')}>
-                          ¿Cómo agregar productos?
+                        <button onClick={() => setUserInput('¿Qué productos tienen stock bajo?')}>
+                          ¿Qué productos tienen stock bajo?
                         </button>
-                        <button onClick={() => handleSuggestedQuestion('¿Qué productos me faltan?')}>
-                          ¿Qué productos me faltan?
-                        </button>
-                        <button onClick={handleRandomTip}>
-                          Dame un consejo
+                        <button onClick={() => setUserInput('¿Quién me debe dinero?')}>
+                          ¿Quién me debe dinero?
                         </button>
                       </div>
                     </div>
@@ -498,22 +287,51 @@ const AssistantBot = () => {
                             </div>
                           )}
                           <div className="message-bubble">
-                            <p style={{ whiteSpace: 'pre-line' }}>{msg.message || msg.text}</p>
-                            {msg.action && (
-                              <button
-                                className="inline-action-btn"
-                                onClick={() => handleQuickAction(msg.action)}
-                              >
-                                {msg.action.icon} {msg.action.label}
-                              </button>
+                            {/* Soporte para Título (Nuevo en botIntelligence) */}
+                            {msg.title && (
+                              <strong style={{ display: 'block', marginBottom: '5px', color: 'var(--primary-color)' }}>
+                                {msg.title}
+                              </strong>
                             )}
+
+                            <p style={{ whiteSpace: 'pre-line' }}>{msg.message || msg.text}</p>
+
+                            {/* Renderizar TIPS si existen */}
+                            {msg.tips && msg.tips.length > 0 && (
+                              <div className="message-tips" style={{ marginTop: '8px', fontSize: '0.9em', color: '#666', background: 'rgba(0,0,0,0.03)', padding: '8px', borderRadius: '4px' }}>
+                                {msg.tips.map((tip, tIdx) => (
+                                  <div key={tIdx} style={{ display: 'flex', gap: '4px', marginBottom: '2px' }}>
+                                    <Lightbulb size={12} style={{ minWidth: '12px', marginTop: '2px' }} />
+                                    <span>{tip}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Renderizar ACCIONES (Array) */}
+                            {msg.actions && msg.actions.length > 0 && (
+                              <div className="message-actions" style={{ marginTop: '8px', display: 'flex', flexWrap: 'wrap', gap: '5px' }}>
+                                {msg.actions.map((act, aIdx) => (
+                                  <button
+                                    key={aIdx}
+                                    className={`inline-action-btn ${act.highlight ? 'highlight' : ''}`}
+                                    onClick={() => handleQuickAction(act)}
+                                  >
+                                    {/* Si botIntelligence devuelve icono como string emoji o componente */}
+                                    {typeof act.icon === 'string' ? act.icon : ''} {act.label}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
+
+                            {/* Legacy: Opciones de menú */}
                             {msg.options && (
                               <div className="message-options">
                                 {msg.options.map((opt, i) => (
                                   <button
                                     key={i}
                                     className="option-btn"
-                                    onClick={() => handleSuggestedQuestion(opt.query)}
+                                    onClick={() => setUserInput(opt.query)} // Simplemente llenamos el input
                                   >
                                     {opt.label}
                                   </button>
@@ -552,16 +370,52 @@ const AssistantBot = () => {
                     onClick={handleSendMessage}
                     disabled={!userInput.trim()}
                   >
-                    <Send size={18} />
+                    <Send size={18} color="#ffffff" strokeWidth={2} />
                   </button>
                 </div>
               </div>
             ) : (
-              // --- MODO CONTEXTO (ORIGINAL MEJORADO) ---
+              // --- MODO CONTEXTO (Sin cambios mayores) ---
               <>
-                <p className="context-message">{context?.message}</p>
+                {criticalAlert ? (
+                  <div className="critical-alert-card" style={{
+                    backgroundColor: criticalAlert.severity === 'critical' ? '#ffebee' : '#fff3e0',
+                    padding: '12px',
+                    borderRadius: '8px',
+                    marginBottom: '12px',
+                    border: `1px solid ${criticalAlert.severity === 'critical' ? '#ffcdd2' : '#ffe0b2'}`
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px', color: criticalAlert.severity === 'critical' ? '#d32f2f' : '#e65100', fontWeight: 'bold', marginBottom: '4px' }}>
+                      <AlertTriangle size={16} />
+                      <span>{criticalAlert.type === 'license' ? 'Licencia' : 'Alerta'}</span>
+                    </div>
+                    <p style={{ fontSize: '14px', margin: '0 0 8px 0', color: '#333' }}>
+                      {criticalAlert.message}
+                    </p>
+                    {criticalAlert.action && (
+                      <button
+                        onClick={() => handleQuickAction({ path: criticalAlert.action.route || criticalAlert.action.path })}
+                        style={{
+                          background: 'white',
+                          border: '1px solid #ddd',
+                          padding: '4px 12px',
+                          borderRadius: '4px',
+                          fontSize: '12px',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '4px',
+                          fontWeight: '500'
+                        }}
+                      >
+                        {criticalAlert.action.label} <ExternalLink size={10} />
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <p className="context-message">{context?.message}</p>
+                )}
 
-                {/* SECCIÓN DE ACCIONES RÁPIDAS */}
                 {quickActions && quickActions.length > 0 && (
                   <div className="bot-actions">
                     <small className="actions-label">Acciones rápidas:</small>
@@ -581,7 +435,6 @@ const AssistantBot = () => {
                   </div>
                 )}
 
-                {/* TIPS (Solo si hay) */}
                 {context?.tips && context.tips.length > 0 && (
                   <div className="bot-tips">
                     <small>💡 Tips:</small>
@@ -598,26 +451,21 @@ const AssistantBot = () => {
         </div>
       )}
 
-      {/* BOTÓN FLOTANTE (AVATAR) */}
+      {/* BOTÓN FLOTANTE */}
       <button
-        className={`lanzo-bot-avatar ${showGlobalAlert ? 'has-alert' : ''} ${chatMode && isOpen ? 'chat-active' : ''}`}
+        className={`lanzo-bot-avatar ${hasActiveAlert ? 'has-alert' : ''} ${chatMode && isOpen ? 'chat-active' : ''}`}
         onClick={() => setIsOpen(!isOpen)}
         aria-label="Asistente Virtual"
       >
-        {showGlobalAlert ? (
+        {hasActiveAlert ? (
           <AlertTriangle size={24} color="white" />
         ) : chatMode && isOpen ? (
           <Sparkles size={24} color="white" />
         ) : (
-          <img
-            src="/boticon.svg"
-            alt="Asistente"
-            className="bot-icon-svg"
-          />
+          <img src="/boticon.svg" alt="Asistente" className="bot-icon-svg" />
         )}
 
-        {/* Notificación si hay algo importante y está cerrado */}
-        {!isOpen && (botData.lowStockCount > 0 || botData.licenseDays <= 7) && (
+        {!isOpen && (botData.lowStockCount > 0 || botData.licenseDays <= 7 || criticalAlert) && (
           <span className="notification-dot"></span>
         )}
       </button>
