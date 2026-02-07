@@ -42,16 +42,16 @@ async function safeExecute(operation) {
     } catch (error) {
         // Obtenemos el mensaje legible
         const errorMessage = error.message || 'Error desconocido';
-        
+
         // Si ya es un error formateado por nuestros repositorios
         if (error.name === 'DatabaseError') {
-            return { 
-                success: false, 
-                error, 
+            return {
+                success: false,
+                error,
                 message: errorMessage // <--- AGREGA ESTO PARA COMPATIBILIDAD
             };
         }
-        
+
         // Si es un error desconocido
         const dbError = new DatabaseError(DB_ERROR_CODES.UNKNOWN, errorMessage);
         return {
@@ -94,13 +94,41 @@ export const layawayRepo = {
 
 // CRUD Básico
 export const loadData = async (storeName, key = null) => {
-    return key
-        ? await generalRepository.getById(storeName, key)
-        : await generalRepository.getAll(storeName);
+    try {
+        // 1. Re-intentar abrir si está cerrada (Dexie usualmente auto-abre, 
+        // pero si se llamó close() explícitamente, hay que reabrir).
+        if (!db.isOpen()) {
+            await db.open();
+        }
+
+        return key
+            ? await generalRepository.getById(storeName, key)
+            : await generalRepository.getAll(storeName);
+
+    } catch (error) {
+        // 2. Si definitivamente está cerrada o cerrándose, devolvemos null 
+        // para no romper la UI.
+        if (error.name === 'DatabaseClosedError') {
+            console.warn(`[DB] Lectura omitida en ${storeName}: La base de datos está cerrada.`);
+            return null;
+        }
+        throw error; // Otros errores sí los lanzamos
+    }
 };
 
 export const deleteData = (storeName, key) => generalRepository.delete(storeName, key);
-export const saveData = (storeName, data) => generalRepository.save(storeName, data);
+export const saveData = async (storeName, data) => {
+    try {
+        if (!db.isOpen()) await db.open();
+        return await generalRepository.save(storeName, data);
+    } catch (error) {
+        if (error.name === 'DatabaseClosedError') {
+            console.warn(`[DB] Escritura omitida en ${storeName}: La base de datos está cerrada.`);
+            return null;
+        }
+        throw error;
+    }
+};
 export const saveBulk = (storeName, data) => generalRepository.saveBulk(storeName, data);
 
 // Productos e Inventario
@@ -219,24 +247,24 @@ export const checkStorageQuota = async () => {
  * para limpiar logs viejos si es necesario.
  */
 export const recoverPendingTransactions = async () => {
-  try {
-    // Buscar logs viejos con PENDING
-    const cutoff = Date.now() - 60000; // 1 minuto atrás
-    const pending = await db.table(STORES.TRANSACTION_LOG)
-      .where('status').equals('PENDING')
-      .filter(log => new Date(log.timestamp).getTime() < cutoff)
-      .toArray();
-    
-    // Marcar como fallidas
-    for (const log of pending) {
-      await db.table(STORES.TRANSACTION_LOG).update(log.id, { 
-        status: 'FAILED', 
-        reason: 'Stale transaction' 
-      });
+    try {
+        // Buscar logs viejos con PENDING
+        const cutoff = Date.now() - 60000; // 1 minuto atrás
+        const pending = await db.table(STORES.TRANSACTION_LOG)
+            .where('status').equals('PENDING')
+            .filter(log => new Date(log.timestamp).getTime() < cutoff)
+            .toArray();
+
+        // Marcar como fallidas
+        for (const log of pending) {
+            await db.table(STORES.TRANSACTION_LOG).update(log.id, {
+                status: 'FAILED',
+                reason: 'Stale transaction'
+            });
+        }
+    } catch (error) {
+        Logger.warn('Recovery skipped:', error);
     }
-  } catch (error) {
-    Logger.warn('Recovery skipped:', error);
-  }
 };
 
 /**

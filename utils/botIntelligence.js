@@ -1,6 +1,6 @@
 // src/services/botIntelligence.js
 
-import { loadData, STORES } from './database';
+import { loadData, STORES } from '../services/db';
 import { useOrderStore } from '../store/useOrderStore';
 import { useProductStore } from '../store/useProductStore';
 import { useAppStore } from '../store/useAppStore';

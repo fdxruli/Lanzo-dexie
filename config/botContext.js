@@ -291,29 +291,29 @@ export const getCriticalAlert = (data = {}) => {
     return {
       type: 'license',
       severity: license.daysRemaining <= 3 ? 'critical' : 'warning',
-      message: `⚠️ Tu licencia vence en ${license.daysRemaining} día${license.daysRemaining > 1 ? 's' : ''}. Renueva ahora para evitar interrupciones.`,
+      message: `Tu licencia vence en ${license.daysRemaining} día${license.daysRemaining > 1 ? 's' : ''}. Renueva ahora para evitar interrupciones. No te preocupes puedes hacerlo totalmente gratis`,
       action: {
         label: 'Renovar licencia',
-        route: '/settings/license'
+        route: '/renovacion-urgente'
       }
     };
   }
 
-  // 2. Muchos productos con stock bajo (más de 10)
+  /* 2. Muchos productos con stock bajo (más de 10)
   const lowStockProducts = products.filter(p => p.stock < 10);
   if (lowStockProducts.length > 10) {
     return {
       type: 'inventory',
       severity: 'warning',
-      message: `📦 Tienes ${lowStockProducts.length} productos con stock bajo. Es momento de hacer pedidos a tus proveedores.`,
+      message: `Tienes ${lowStockProducts.length} productos con stock bajo. Es momento de hacer pedidos a tus proveedores.`,
       action: {
         label: 'Ver productos',
-        route: '/inventory'
+        route: '/productos'
       }
     };
-  }
+  }*/
 
-  // 3. Deudas muy altas (más de $10,000)
+  /* 3. Deudas muy altas (más de $10,000)
   if (stats.totalDebt && stats.totalDebt > 10000) {
     return {
       type: 'debt',
@@ -324,17 +324,17 @@ export const getCriticalAlert = (data = {}) => {
         route: '/customers/debts'
       }
     };
-  }
+  }*/
 
   // 4. No se ha hecho backup recientemente (más de 7 días)
   if (stats.lastBackupDays && stats.lastBackupDays > 7) {
     return {
       type: 'backup',
       severity: 'critical',
-      message: `⚠️ No has hecho un backup en ${stats.lastBackupDays} días. Es importante respaldar tu información regularmente.`,
+      message: ` No has hecho un backup en ${stats.lastBackupDays} días. Es importante respaldar tu información regularmente.`,
       action: {
         label: 'Hacer backup',
-        route: '/settings/backup'
+        path: '/configuracion?tab=maintenance'
       }
     };
   }
@@ -344,10 +344,10 @@ export const getCriticalAlert = (data = {}) => {
     return {
       type: 'cash',
       severity: 'critical',
-      message: `💰 Hay una diferencia de $${Math.abs(stats.cashDifference).toFixed(2)} en caja. Revisa el corte de caja urgentemente.`,
+      message: `Hay una diferencia de $${Math.abs(stats.cashDifference).toFixed(2)} en caja. Revisa el corte de caja urgentemente.`,
       action: {
         label: 'Ver corte de caja',
-        route: '/reports/cash-close'
+        path: '/caja'
       }
     };
   }

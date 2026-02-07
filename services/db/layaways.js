@@ -1,7 +1,9 @@
+// services/db/layaways.js - VERSIÓN CORREGIDA
 import { db, STORES } from './dexie';
 import { handleDexieError, DatabaseError } from './utils';
-// Importamos el repositorio de productos para usar su lógica de deducción blindada
 import { productsRepository } from './products';
+import { useStatsStore } from '../../store/useStatsStore'; // ✅ AGREGADO
+import Logger from '../Logger';
 
 export const layawayRepository = {
 
@@ -9,23 +11,22 @@ export const layawayRepository = {
      * Crear un nuevo apartado y RESERVAR STOCK
      * @param {object} layawayData - Datos del apartado
      * @param {number} initialPayment - Monto del primer abono
+     * @param {string} cajaId - ID de la caja abierta (opcional) ✅ NUEVO
      */
-    async create(layawayData, initialPayment = 0) {
+    async create(layawayData, initialPayment = 0, cajaId = null) {
         try {
-            // Transacción RW que abarca Tablas de Apartados, Lotes y Menú
             return await db.transaction('rw', [
                 db.table(STORES.LAYAWAYS),
                 db.table(STORES.PRODUCT_BATCHES),
-                db.table(STORES.MENU)
+                db.table(STORES.MENU),
+                db.table(STORES.MOVIMIENTOS_CAJA) // ✅ AGREGADO
             ], async () => {
 
                 // 1. PREPARAR DEDUCCIONES DE STOCK
-                // Separamos items con lote (Tallas/Colores) de los genéricos
                 const batchDeductions = [];
                 const genericItems = [];
 
                 layawayData.items.forEach(item => {
-                    // Si tiene batchId, es una variante específica (Lógica Apparel)
                     if (item.batchId) {
                         batchDeductions.push({
                             batchId: item.batchId,
@@ -33,24 +34,21 @@ export const layawayRepository = {
                             reason: `Apartado para ${layawayData.customerName}`
                         });
                     } else {
-                        // Producto simple (ej. un accesorio sin variantes)
                         genericItems.push(item);
                     }
                 });
 
-                // 2. EJECUTAR DESCUENTO DE LOTES (Usando tu lógica robusta)
+                // 2. EJECUTAR DESCUENTO DE LOTES
                 if (batchDeductions.length > 0) {
-                    // Esto lanzará error si no hay stock suficiente, abortando toda la transacción
                     await productsRepository.processBatchDeductions(batchDeductions, {
-                        validateStock: true, // No permitir apartar lo que no tienes
-                        allowPartial: false, // O se aparta todo o nada
+                        validateStock: true,
+                        allowPartial: false,
                         logDetails: true
                     });
                 }
 
-                // 3. EJECUTAR DESCUENTO DE GENÉRICOS (Manual)
+                // 3. EJECUTAR DESCUENTO DE GENÉRICOS
                 for (const item of genericItems) {
-                    // Usamos item.parentId o item.id según corresponda
                     const productId = item.parentId || item.id;
                     const product = await db.table(STORES.MENU).get(productId);
 
@@ -59,7 +57,6 @@ export const layawayRepository = {
                             throw new Error(`Stock insuficiente para: ${product.name}`);
                         }
 
-                        // Actualización directa
                         await db.table(STORES.MENU).update(productId, {
                             stock: product.stock - item.quantity,
                             updatedAt: new Date().toISOString()
@@ -67,7 +64,7 @@ export const layawayRepository = {
                     }
                 }
 
-                // 4. GUARDAR EL APARTADO (Solo si pasamos el filtro de stock)
+                // 4. GUARDAR EL APARTADO
                 const now = new Date().toISOString();
                 const newLayaway = {
                     ...layawayData,
@@ -83,8 +80,21 @@ export const layawayRepository = {
                         id: crypto.randomUUID(),
                         amount: initialPayment,
                         date: now,
-                        type: 'initial_deposit'
+                        type: 'initial_deposit',
+                        cajaId: cajaId // ✅ REFERENCIA A LA CAJA
                     });
+
+                    // ✅ NUEVO: REGISTRAR EN MOVIMIENTOS DE CAJA (SI SE PROPORCIONÓ)
+                    if (cajaId) {
+                        await db.table(STORES.MOVIMIENTOS_CAJA).add({
+                            id: `mov-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+                            caja_id: cajaId,
+                            tipo: 'entrada',
+                            monto: initialPayment,
+                            concepto: `Abono inicial Apartado - ${layawayData.customerName}`,
+                            fecha: now
+                        });
+                    }
                 }
 
                 await db.table(STORES.LAYAWAYS).add(newLayaway);
@@ -93,15 +103,12 @@ export const layawayRepository = {
             });
 
         } catch (error) {
-            // Si falla por stock, el mensaje vendrá claro desde processBatchDeductions
             throw handleDexieError(error, 'Create Layaway');
         }
     },
 
     /**
      * Cancelar un apartado y DEVOLVER STOCK
-     * @param {string} layawayId 
-     * @param {string} reason 
      */
     async cancel(layawayId, reason = 'Cancelación por cliente') {
         try {
@@ -115,13 +122,12 @@ export const layawayRepository = {
                 if (!layaway) throw new Error("Apartado no encontrado");
                 if (layaway.status !== 'active') throw new Error("Solo se pueden cancelar apartados activos");
 
-                // Set para saber qué padres necesitan recalculo (optimización)
                 const productsToSync = new Set();
 
-                // 1. RESTAURAR STOCK
+                // RESTAURAR STOCK
                 for (const item of layaway.items) {
 
-                    // CASO A: Variantes (Lotes - Ropa)
+                    // CASO A: Variantes (Lotes)
                     if (item.batchId) {
                         const batch = await db.table(STORES.PRODUCT_BATCHES).get(item.batchId);
                         if (batch) {
@@ -131,7 +137,6 @@ export const layawayRepository = {
                                 isActive: true,
                                 updatedAt: new Date().toISOString()
                             });
-                            // Marcamos el padre para sincronizar después
                             productsToSync.add(batch.productId);
                         }
                     }
@@ -147,11 +152,8 @@ export const layawayRepository = {
                     }
                 }
 
-                // 2. SINCRONIZAR PADRES (Fix para Apparel)
-                // Recalculamos el total sumando todos los lotes para que el menú muestre la realidad
+                // SINCRONIZAR PADRES
                 for (const productId of productsToSync) {
-                    // Reutilizamos la lógica interna del repositorio de productos
-                    // (Si no puedes acceder a saveBatchAndSyncProduct, aquí replicamos lo básico)
                     const allBatches = await db.table(STORES.PRODUCT_BATCHES)
                         .where('productId').equals(productId).toArray();
 
@@ -164,7 +166,7 @@ export const layawayRepository = {
                     });
                 }
 
-                // 3. ACTUALIZAR ESTADO
+                // ACTUALIZAR ESTADO
                 await db.table(STORES.LAYAWAYS).update(layawayId, {
                     status: 'cancelled',
                     updatedAt: new Date().toISOString(),
@@ -179,11 +181,14 @@ export const layawayRepository = {
     },
 
     /**
-     * NUEVO: Convierte el apartado en venta histórica.
-     * Centraliza la lógica que tenías en el componente UI.
+     * ✅ CORREGIDO: Convierte el apartado en venta histórica Y ACTUALIZA ESTADÍSTICAS
      */
     async convertToSale(layawayId, cashierId = 'system') {
-        return await db.transaction('rw', [db.table(STORES.LAYAWAYS), db.table(STORES.SALES)], async () => {
+        return await db.transaction('rw', [
+            db.table(STORES.LAYAWAYS), 
+            db.table(STORES.SALES),
+            db.table(STORES.DAILY_STATS) // ✅ AGREGADO
+        ], async () => {
             const layaway = await db.table(STORES.LAYAWAYS).get(layawayId);
             if (!layaway) throw new Error("Apartado no encontrado");
 
@@ -199,15 +204,15 @@ export const layawayRepository = {
             });
 
             // 2. Crear venta histórica
+            const now = new Date().toISOString();
             const saleRecord = {
                 id: `sale-layaway-${layaway.id}`,
-                timestamp: new Date().toISOString(),
+                timestamp: now,
                 customerId: layaway.customerId,
                 customerName: layaway.customerName,
-                // Importante: stockManaged: true evita que el sistema de reportes duplique la resta de inventario
                 items: layaway.items.map(item => ({
                     ...item,
-                    stockManaged: true
+                    stockManaged: true // Evita doble descuento
                 })),
                 total: layaway.totalAmount,
                 subtotal: layaway.totalAmount,
@@ -221,6 +226,23 @@ export const layawayRepository = {
             };
 
             await db.table(STORES.SALES).add(saleRecord);
+
+            // ✅ 3. ACTUALIZAR ESTADÍSTICAS (CRÍTICO)
+            try {
+                const costOfGoodsSold = layaway.items.reduce((sum, item) => {
+                    const cost = item.cost || 0;
+                    return sum + (cost * item.quantity);
+                }, 0);
+
+                // Actualizar estadísticas globales
+                await useStatsStore.getState().updateStatsForNewSale(saleRecord, costOfGoodsSold);
+
+                Logger.log(`✅ Apartado #${layaway.id.slice(-6)} convertido a venta. Stats actualizadas.`);
+            } catch (statsError) {
+                Logger.warn("⚠️ Advertencia: La venta se registró pero falló la actualización de estadísticas:", statsError);
+                // NO lanzamos error porque la venta YA se guardó exitosamente
+            }
+
             return { success: true, saleId: saleRecord.id };
         });
     },
@@ -239,21 +261,23 @@ export const layawayRepository = {
         return await db.table(STORES.LAYAWAYS).get(id);
     },
 
-    async addPayment(layawayId, amount) {
-        return await db.transaction('rw', [db.table(STORES.LAYAWAYS)], async () => {
+    /**
+     * ✅ MEJORADO: Registra pago y vincula con caja
+     */
+    async addPayment(layawayId, amount, cajaId = null) {
+        return await db.transaction('rw', [
+            db.table(STORES.LAYAWAYS),
+            db.table(STORES.MOVIMIENTOS_CAJA) // ✅ AGREGADO
+        ], async () => {
             const layaway = await db.table(STORES.LAYAWAYS).get(layawayId);
             if (!layaway) throw new Error("Apartado no encontrado");
 
             const newPaidAmount = (layaway.paidAmount || 0) + amount;
-            // IMPORTANTE: Permitir margen de error de centavos por punto flotante
             const isFullyPaid = newPaidAmount >= (layaway.totalAmount - 0.01);
 
             const updates = {
                 paidAmount: newPaidAmount,
                 updatedAt: new Date().toISOString(),
-                // OJO: Si se completa, NO cambiamos a 'completed' aquí automáticamente 
-                // porque requerimos un paso final de "Entregar mercancía" o convertir a Venta Real.
-                // Lo mantenemos 'active' pero listo para liquidar.
                 status: layaway.status
             };
 
@@ -261,11 +285,25 @@ export const layawayRepository = {
                 id: crypto.randomUUID(),
                 amount: amount,
                 date: new Date().toISOString(),
-                type: 'regular_payment'
+                type: 'regular_payment',
+                cajaId: cajaId // ✅ REFERENCIA A LA CAJA
             }];
             updates.payments = newPayments;
 
             await db.table(STORES.LAYAWAYS).update(layawayId, updates);
+
+            // ✅ REGISTRAR EN CAJA (SI SE PROPORCIONÓ)
+            if (cajaId) {
+                await db.table(STORES.MOVIMIENTOS_CAJA).add({
+                    id: `mov-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`,
+                    caja_id: cajaId,
+                    tipo: 'entrada',
+                    monto: amount,
+                    concepto: `Abono Apartado #${layawayId.slice(-4)} - ${layaway.customerName}`,
+                    fecha: new Date().toISOString()
+                });
+            }
+
             return { success: true, isFullyPaid, newPaidAmount };
         });
     }

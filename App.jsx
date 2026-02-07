@@ -277,8 +277,17 @@ function App() {
             />
           )}
           <NavigationGuard />
+          
           <ErrorBoundary>
             <Routes>
+            <Route 
+                path="/renovacion-urgente" 
+                element={
+                  <div style={{ width: '100vw', height: '100vh', background: '#000' }}>
+                    <RenewalModal />
+                  </div>
+                } 
+              />
               <Route path="/" element={<Layout />}>
                 <Route index element={<Suspense fallback={<PageLoader />}><PosPage /></Suspense>} />
                 <Route path="caja" element={<Suspense fallback={<PageLoader />}><CajaPage /></Suspense>} />
