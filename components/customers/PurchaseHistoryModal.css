@@ -1,4 +1,17 @@
 /* src/components/customers/PurchaseHistoryModal.css */
+.modal-overlay {
+  position: fixed; /* Fija el elemento a la ventana del navegador */
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background-color: rgba(0, 0, 0, 0.5); /* Fondo oscuro semitransparente */
+  display: flex;
+  justify-content: center; /* Centra horizontalmente */
+  align-items: center;     /* Centra verticalmente */
+  z-index: 8000;           /* Asegura que esté por encima de otros elementos (navbar, listas, etc.) */
+  backdrop-filter: blur(2px); /* Opcional: efecto borroso en el fondo */
+}
 
 .history-modal-content {
   background-color: var(--card-background-color); 

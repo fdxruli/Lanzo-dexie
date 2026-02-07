@@ -1,28 +1,28 @@
 // src/components/customers/CustomerCard.jsx
 import React, { memo } from 'react';
-import { 
-    Edit, 
-    Trash2, 
-    History, 
-    MessageCircle, 
-    Wallet, 
-    Phone, 
-    MapPin, 
+import {
+    Edit,
+    Trash2,
+    History,
+    MessageCircle,
+    Wallet,
+    Phone,
+    MapPin,
     AlertCircle,
     Package // <-- Nuevo icono importado
 } from 'lucide-react';
 
-const CustomerCard = memo(({ 
-    customer, 
-    isWhatsAppLoading, 
-    onEdit, 
-    onDelete, 
-    onViewHistory, 
-    onAbonar, 
+const CustomerCard = memo(({
+    customer,
+    isWhatsAppLoading,
+    onEdit,
+    onDelete,
+    onViewHistory,
+    onAbonar,
     onWhatsApp,
     onViewLayaways // <-- Nuevo prop
 }) => {
-    
+
     const hasDebt = (customer.debt || 0) > 0;
 
     return (
@@ -41,11 +41,11 @@ const CustomerCard = memo(({
 
                 <div className="customer-details">
                     <p title="Teléfono">
-                        <Phone size={16} className="icon-muted" /> 
+                        <Phone size={16} className="icon-muted" />
                         <span>{customer.phone || 'Sin teléfono'}</span>
                     </p>
                     <p title="Dirección">
-                        <MapPin size={16} className="icon-muted" /> 
+                        <MapPin size={16} className="icon-muted" />
                         <span className="address-text">{customer.address || 'Sin dirección'}</span>
                     </p>
                 </div>
@@ -53,7 +53,7 @@ const CustomerCard = memo(({
 
             {/* Acciones */}
             <div className="customer-actions-container">
-                
+
                 {/* Acciones Primarias */}
                 <div className="actions-primary">
                     {hasDebt && (
@@ -68,8 +68,7 @@ const CustomerCard = memo(({
 
                     {/* NUEVO BOTÓN DE APARTADOS */}
                     <button
-                        className="btn btn-secondary"
-                        style={{ backgroundColor: '#e3f2fd', color: '#1565c0', border: 'none' }}
+                        className="btn btn-layaway"
                         onClick={() => onViewLayaways(customer)}
                         title="Ver apartados activos"
                     >
@@ -98,22 +97,25 @@ const CustomerCard = memo(({
                         title="Ver historial"
                     >
                         <History size={16} />
+                        <span>Historial</span>
                     </button>
-                    
-                    <button 
-                        className="btn-icon-text info" 
+
+                    <button
+                        className="btn-icon-text info"
                         onClick={() => onEdit(customer)}
                         title="Editar"
                     >
                         <Edit size={16} />
+                        <span>Editar</span>
                     </button>
-                    
-                    <button 
-                        className="btn-icon-text danger" 
+
+                    <button
+                        className="btn-icon-text danger"
                         onClick={() => onDelete(customer.id)}
                         title="Borrar"
                     >
                         <Trash2 size={16} />
+                        <span>Borrar</span>
                     </button>
                 </div>
             </div>

@@ -1,14 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
-    Package,
-    Calendar,
-    DollarSign,
-    CheckCircle,
-    XCircle,
-    AlertTriangle,
-    Clock,
-    ArrowRight,
-    ShoppingBag
+    Package, Calendar, DollarSign, CheckCircle, XCircle,
+    AlertTriangle, Clock, ShoppingBag, ChevronRight
 } from 'lucide-react';
 import { layawayRepository } from '../../services/db/layaways';
 import { useCaja } from '../../hooks/useCaja';
@@ -21,9 +14,9 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
     const [loading, setLoading] = useState(false);
     const [processingId, setProcessingId] = useState(null);
 
-    // Estado para abonos parciales
+    // Estado para abonos
     const [paymentAmount, setPaymentAmount] = useState('');
-    const [selectedLayawayId, setSelectedLayawayId] = useState(null);
+    const [activePaymentId, setActivePaymentId] = useState(null); // ID del apartado que se está abonando
 
     const { registrarMovimiento, cajaActual } = useCaja();
 
@@ -33,7 +26,7 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
         } else {
             setLayaways([]);
             setPaymentAmount('');
-            setSelectedLayawayId(null);
+            setActivePaymentId(null);
         }
     }, [show, customer]);
 
@@ -61,8 +54,9 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
         const amount = parseFloat(paymentAmount);
         const deudaPendiente = layaway.totalAmount - layaway.paidAmount;
 
-        if (!amount || amount <= 0) return showMessageModal('Ingresa un monto válido.');
-        if (amount > deudaPendiente + 0.01) return showMessageModal('El monto excede la deuda pendiente.');
+        if (!amount || amount <= 0) return showMessageModal('Ingresa un monto válido.', null, { type: 'warning' });
+        // Permitimos un pequeño margen de error por decimales (0.01)
+        if (amount > deudaPendiente + 0.1) return showMessageModal('El monto excede la deuda pendiente.', null, { type: 'warning' });
 
         setProcessingId(layaway.id);
         try {
@@ -78,7 +72,7 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
 
             showMessageModal('✅ Abono registrado correctamente.');
             setPaymentAmount('');
-            setSelectedLayawayId(null);
+            setActivePaymentId(null);
             loadLayaways();
             if (onUpdate) onUpdate();
 
@@ -93,16 +87,16 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
     const handleDeliver = async (layaway) => {
         const pending = layaway.totalAmount - layaway.paidAmount;
         if (pending > 0.50) {
-            showMessageModal(`⚠️ El apartado tiene saldo pendiente de $${pending.toFixed(2)}. Liquídalo primero.`);
+            showMessageModal(`⚠️ Saldo pendiente de $${pending.toFixed(2)}. Liquídalo primero.`);
             return;
         }
 
-        if (!window.confirm("¿Confirmar entrega de mercancía? Esto cerrará el apartado y registrará la venta histórica.")) return;
+        if (!window.confirm("¿Confirmar entrega de mercancía? Se registrará la venta histórica.")) return;
 
         setProcessingId(layaway.id);
         try {
             await layawayRepository.convertToSale(layaway.id);
-            showMessageModal('🎉 ¡Mercancía entregada! Apartado finalizado exitosamente.');
+            showMessageModal('🎉 ¡Mercancía entregada! Apartado finalizado.');
             loadLayaways();
             if (onUpdate) onUpdate();
         } catch (error) {
@@ -114,14 +108,14 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
     };
 
     const handleCancel = async (layaway) => {
-        if (!window.confirm("¿Seguro que deseas CANCELAR este apartado? El stock será devuelto al inventario.")) return;
+        if (!window.confirm("¿CANCELAR apartado? El stock será devuelto al inventario.")) return;
 
         setProcessingId(layaway.id);
         try {
-            await layawayRepository.cancel(layaway.id, "Cancelado por el usuario desde Panel Clientes");
+            await layawayRepository.cancel(layaway.id, "Cancelado por usuario");
             let msg = 'Apartado cancelado. Stock restaurado.';
             if (layaway.paidAmount > 0) {
-                msg += ` ℹ️ Devolver $${layaway.paidAmount.toFixed(2)} al cliente (procesar manualmente en caja).`;
+                msg += ` ℹ️ Devolver $${layaway.paidAmount.toFixed(2)} al cliente.`;
             }
             showMessageModal(msg);
             loadLayaways();
@@ -134,7 +128,6 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
         }
     };
 
-    // Calcular días transcurridos
     const getDaysElapsed = (dateString) => {
         const start = new Date(dateString);
         const now = new Date();
@@ -145,73 +138,71 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
     if (!show || !customer) return null;
 
     return (
-        <div className="modal" style={{ display: 'flex', zIndex: 9999 }}>
+        <div className="modal" style={{ display: 'flex', zIndex: 8001 }}>
             <div className="modal-content layaway-modal-content">
                 
-                {/* Header Fijo */}
+                {/* Header */}
                 <div className="modal-header">
-                    <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                    <h2 className="modal-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', fontSize: '1.2rem' }}>
                         <Package className="text-primary" size={24} />
                         <div>
-                            <span>Apartados Activos</span>
-                            <small style={{ display: 'block', fontSize: '0.9rem', color: 'var(--text-light)', fontWeight: 'normal' }}>
-                                Cliente: {customer.name}
-                            </small>
+                            <span>Apartados</span>
+                            <span style={{ fontSize: '0.85rem', color: 'var(--text-light)', fontWeight: 'normal', display: 'block' }}>
+                                {customer.name}
+                            </span>
                         </div>
                     </h2>
-                    <button className="close-btn" onClick={onClose} style={{ fontSize: '1.5rem', color: 'var(--text-light)', background: 'none', border: 'none' }}>
-                        &times;
-                    </button>
+                    <button className="close-btn" onClick={onClose}>&times;</button>
                 </div>
 
-                {/* Cuerpo Scrolleable */}
+                {/* Body */}
                 <div className="layaway-modal-body">
                     {loading ? (
                         <div className="layaway-empty-state">
                             <div className="spinner"></div>
-                            <p>Cargando información...</p>
+                            <p>Cargando...</p>
                         </div>
                     ) : layaways.length === 0 ? (
                         <div className="layaway-empty-state">
                             <Package size={64} strokeWidth={1} />
-                            <h3>No hay apartados activos</h3>
-                            <p>Este cliente no tiene mercancía apartada en este momento.</p>
+                            <h3>Sin Apartados</h3>
+                            <p>Este cliente no tiene apartados activos.</p>
                         </div>
                     ) : (
                         <div className="layaways-list">
                             {layaways.map(layaway => {
                                 const pending = layaway.totalAmount - (layaway.paidAmount || 0);
                                 const progress = (layaway.paidAmount / layaway.totalAmount) * 100;
-                                const isReady = pending <= 0.01;
+                                const isReady = pending <= 0.1;
                                 const daysElapsed = getDaysElapsed(layaway.createdAt);
+                                const isPayingThis = activePaymentId === layaway.id;
 
                                 return (
                                     <div key={layaway.id} className="layaway-card">
                                         
-                                        {/* HEADER DE LA TARJETA */}
+                                        {/* 1. Header de Tarjeta */}
                                         <div className="layaway-card-header">
                                             <div className="layaway-meta">
                                                 <div className="layaway-date">
                                                     <Calendar size={16} />
                                                     {new Date(layaway.createdAt).toLocaleDateString()}
-                                                    <span style={{ fontSize: '0.8em', color: 'var(--text-light)', fontWeight: 'normal', display: 'flex', alignItems: 'center', gap: '4px', marginLeft: '10px' }}>
-                                                        <Clock size={12} /> Hace {daysElapsed} días
-                                                    </span>
                                                 </div>
-                                                <div className="layaway-id">REF: {layaway.id}</div>
+                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-light)' }}>
+                                                    Hace {daysElapsed} días • Ref: {layaway.id.slice(-6)}
+                                                </span>
                                             </div>
-                                            
                                             <div className={`layaway-status-badge ${isReady ? 'ready' : 'pending'}`}>
-                                                {isReady ? 'Listo para Entregar' : 'En Proceso'}
+                                                {isReady ? 'Listo' : 'Pendiente'}
                                             </div>
                                         </div>
 
-                                        {/* CUERPO: LISTA DE PRODUCTOS */}
-                                        <div className="layaway-card-body">
-                                            <table className="layaway-items-table">
+                                        {/* 2. Productos (Diseño Híbrido) */}
+                                        <div className="layaway-products-container">
+                                            {/* Versión Escritorio */}
+                                            <table className="desktop-table">
                                                 <thead>
                                                     <tr>
-                                                        <th style={{width: '60%'}}>Producto</th>
+                                                        <th>Producto</th>
                                                         <th style={{textAlign: 'center'}}>Cant.</th>
                                                         <th style={{textAlign: 'right'}}>Total</th>
                                                     </tr>
@@ -220,12 +211,8 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
                                                     {layaway.items.map((item, idx) => (
                                                         <tr key={idx}>
                                                             <td>
-                                                                <div className="item-name">{item.name}</div>
-                                                                {(item.variantName || item.skuDetected) && (
-                                                                    <span className="item-variant">
-                                                                        {item.variantName ? item.variantName : `SKU: ${item.skuDetected}`}
-                                                                    </span>
-                                                                )}
+                                                                {item.name}
+                                                                {item.variantName && <small style={{display:'block', color:'gray'}}>{item.variantName}</small>}
                                                             </td>
                                                             <td style={{textAlign: 'center'}}>x{item.quantity}</td>
                                                             <td style={{textAlign: 'right'}}>${(item.price * item.quantity).toFixed(2)}</td>
@@ -234,111 +221,124 @@ export default function LayawayModal({ show, onClose, customer, onUpdate }) {
                                                 </tbody>
                                             </table>
 
-                                            {/* RESUMEN FINANCIERO */}
-                                            <div className="layaway-financial-section">
-                                                <div className="financial-summary">
-                                                    <div className="finance-block">
-                                                        <span className="finance-label">Total Apartado</span>
-                                                        <div className="finance-value total">${layaway.totalAmount.toFixed(2)}</div>
+                                            {/* Versión Móvil */}
+                                            <div className="mobile-product-list">
+                                                {layaway.items.map((item, idx) => (
+                                                    <div key={idx} className="mobile-item">
+                                                        <div className="m-item-info">
+                                                            <span className="m-item-name">{item.name} {item.variantName ? `(${item.variantName})` : ''}</span>
+                                                            <span className="m-item-qty">{item.quantity} ud. a ${item.price}</span>
+                                                        </div>
+                                                        <span className="m-item-total">${(item.price * item.quantity).toFixed(2)}</span>
                                                     </div>
-                                                    
-                                                    {/* Espaciador flexible */}
-                                                    <div style={{flex: 1}}></div>
-
-                                                    <div className="finance-block" style={{marginRight: '20px'}}>
-                                                        <span className="finance-label">Abonado</span>
-                                                        <div className="finance-value paid">${layaway.paidAmount.toFixed(2)}</div>
-                                                    </div>
-                                                    <div className="finance-block">
-                                                        <span className="finance-label">Restante</span>
-                                                        <div className="finance-value debt">${pending.toFixed(2)}</div>
-                                                    </div>
-                                                </div>
-                                                
-                                                <div className="progress-container">
-                                                    <div 
-                                                        className={`progress-fill ${isReady ? 'ready' : 'pending'}`}
-                                                        style={{ width: `${progress}%` }}
-                                                    ></div>
-                                                </div>
+                                                ))}
                                             </div>
                                         </div>
 
-                                        {/* FOOTER: ACCIONES */}
+                                        {/* 3. Finanzas (Grid) */}
+                                        <div className="layaway-financial-section">
+                                            <div className="financial-grid">
+                                                <div className="finance-block">
+                                                    <span className="finance-label">Total</span>
+                                                    <span className="finance-value total">${layaway.totalAmount.toFixed(2)}</span>
+                                                </div>
+                                                <div className="finance-block">
+                                                    <span className="finance-label">Abonado</span>
+                                                    <span className="finance-value paid">${layaway.paidAmount.toFixed(2)}</span>
+                                                </div>
+                                                <div className="finance-block">
+                                                    <span className="finance-label">Resta</span>
+                                                    <span className="finance-value debt">${pending.toFixed(2)}</span>
+                                                </div>
+                                            </div>
+                                            <div className="progress-container">
+                                                <div 
+                                                    className={`progress-fill ${isReady ? 'ready' : 'pending'}`}
+                                                    style={{ width: `${progress}%` }}
+                                                ></div>
+                                            </div>
+                                        </div>
+
+                                        {/* 4. Footer de Acciones */}
                                         <div className="layaway-card-footer">
                                             
-                                            {/* ZONA DE ABONOS */}
-                                            {!isReady ? (
-                                                <div className="payment-input-group">
-                                                    {selectedLayawayId === layaway.id ? (
-                                                        <>
-                                                            <div className="input-with-icon">
-                                                                <span className="input-currency-symbol">$</span>
-                                                                <input
-                                                                    type="number"
-                                                                    className="payment-input-modern"
-                                                                    placeholder="0.00"
-                                                                    value={paymentAmount}
-                                                                    onChange={(e) => setPaymentAmount(e.target.value)}
-                                                                    autoFocus
-                                                                    onKeyDown={(e) => e.key === 'Enter' && handleAddPayment(layaway)}
-                                                                />
-                                                            </div>
-                                                            <button
-                                                                className="btn btn-primary btn-sm btn-icon-text"
-                                                                onClick={() => handleAddPayment(layaway)}
-                                                                disabled={processingId === layaway.id}
-                                                            >
-                                                                <CheckCircle size={16} /> Confirmar
-                                                            </button>
-                                                            <button
-                                                                className="btn btn-cancel btn-sm"
-                                                                onClick={() => {
-                                                                    setSelectedLayawayId(null);
-                                                                    setPaymentAmount('');
-                                                                }}
-                                                            >
-                                                                <XCircle size={16} />
-                                                            </button>
-                                                        </>
-                                                    ) : (
-                                                        <button
-                                                            className="btn btn-secondary btn-sm btn-icon-text"
-                                                            onClick={() => setSelectedLayawayId(layaway.id)}
+                                            {/* A) Modo Normal: Botón de Abonar grande y Botones de gestión */}
+                                            {!isPayingThis && !isReady && (
+                                                <button 
+                                                    className="btn-start-payment"
+                                                    onClick={() => {
+                                                        setActivePaymentId(layaway.id);
+                                                        setPaymentAmount('');
+                                                    }}
+                                                >
+                                                    <DollarSign size={20} /> Registrar Nuevo Abono
+                                                </button>
+                                            )}
+
+                                            {/* B) Modo Abono: Formulario Expandido */}
+                                            {isPayingThis && (
+                                                <div className="payment-zone">
+                                                    <label style={{fontWeight:'600', fontSize:'0.9rem'}}>¿Cuánto desea abonar?</label>
+                                                    <div className="payment-input-row">
+                                                        <span className="payment-currency">$</span>
+                                                        <input 
+                                                            type="number" 
+                                                            className="payment-input-large"
+                                                            placeholder="0.00"
+                                                            autoFocus
+                                                            value={paymentAmount}
+                                                            onChange={(e) => setPaymentAmount(e.target.value)}
+                                                            onKeyDown={(e) => e.key === 'Enter' && handleAddPayment(layaway)}
+                                                        />
+                                                    </div>
+                                                    <div className="payment-actions-row">
+                                                        <button 
+                                                            className="btn btn-primary"
+                                                            onClick={() => handleAddPayment(layaway)}
+                                                            disabled={processingId === layaway.id}
                                                         >
-                                                            <DollarSign size={16} /> Registrar Abono
+                                                            <CheckCircle size={18} style={{marginRight:5}} /> Confirmar
                                                         </button>
-                                                    )}
-                                                </div>
-                                            ) : (
-                                                <div style={{ flex: 1, color: 'var(--success-color)', fontWeight: '600', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                                    <CheckCircle size={20} />
-                                                    ¡Pagado Completo!
+                                                        <button 
+                                                            className="btn btn-secondary"
+                                                            onClick={() => setActivePaymentId(null)}
+                                                        >
+                                                            <XCircle size={18} style={{marginRight:5}} /> Cancelar
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             )}
 
-                                            {/* BOTONES DE GESTIÓN */}
-                                            <div style={{ display: 'flex', gap: '10px' }}>
-                                                {isReady && (
-                                                    <button
-                                                        className="btn btn-success btn-sm btn-icon-text"
-                                                        onClick={() => handleDeliver(layaway)}
-                                                        disabled={processingId === layaway.id}
-                                                    >
-                                                        <ShoppingBag size={16} />
-                                                        Entregar Mercancía
-                                                    </button>
-                                                )}
-
-                                                <button
-                                                    className="btn btn-delete btn-sm btn-icon-text"
-                                                    onClick={() => handleCancel(layaway)}
-                                                    disabled={processingId === layaway.id}
-                                                    title="Cancelar y devolver al inventario"
-                                                >
-                                                    <AlertTriangle size={16} /> Cancelar
-                                                </button>
-                                            </div>
+                                            {/* C) Acciones Generales (Entregar / Cancelar) */}
+                                            {/* Solo mostramos cancelar si NO estamos abonando para evitar ruido visual, o siempre abajo */}
+                                            {!isPayingThis && (
+                                                <div className="layaway-main-actions">
+                                                    {isReady ? (
+                                                        <div style={{flex:1, display:'flex', gap:'10px', flexDirection: 'column'}}>
+                                                            <div style={{textAlign:'center', color:'var(--success-color)', fontWeight:'bold', marginBottom:'5px'}}>
+                                                                ¡Listo para entregar!
+                                                            </div>
+                                                            <button
+                                                                className="btn btn-success"
+                                                                style={{justifyContent:'center'}}
+                                                                onClick={() => handleDeliver(layaway)}
+                                                                disabled={processingId === layaway.id}
+                                                            >
+                                                                <ShoppingBag size={18} style={{marginRight:5}} /> Entregar Mercancía
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <button
+                                                            className="btn btn-delete btn-sm"
+                                                            onClick={() => handleCancel(layaway)}
+                                                            disabled={processingId === layaway.id}
+                                                            style={{border:'1px solid transparent'}} // Estilo sutil
+                                                        >
+                                                            <AlertTriangle size={16} style={{marginRight:5}} /> Cancelar Apartado
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 );

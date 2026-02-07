@@ -120,10 +120,12 @@
 .actions-primary {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
 .actions-primary .btn {
-  flex: 1;
+  flex: 1 1 auto;
+  min-width: 80px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -157,6 +159,14 @@
 .btn-whatsapp:disabled {
   opacity: 0.7;
   cursor: not-allowed;
+}
+
+.btn-layaway {
+  background-color: #e3f2fd;
+  color: #1565c0;
+}
+.btn-layaway:hover {
+  background-color: #bbdefb; /* Un tono un poco más oscuro para el hover */
 }
 
 /* Fila 2: Botones Pequeños (Secondary) */
