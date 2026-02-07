@@ -161,7 +161,7 @@ export default function CustomersPage() {
 
       // Validación de negocio (Deuda)
       if (customer && customer.debt > 0) {
-        showMessageModal('No se puede eliminar un cliente con deuda pendiente.');
+        showMessageModal('No se puede eliminar un cliente con deuda pendiente.', null, { type: 'error' });
         return;
       }
 
