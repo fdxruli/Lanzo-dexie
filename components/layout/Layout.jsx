@@ -12,7 +12,7 @@ import { Toaster } from 'react-hot-toast';
 import { useAppStore } from '../../store/useAppStore';
 import './Layout.css';
 import Logger from '../../services/Logger';
-import InstallPrompt from '../common/InstallPrompt'; 
+import InstallPrompt from '../common/InstallPrompt';
 import AssistantBot from '../common/AssistantBot';
 
 function Layout() {
@@ -38,8 +38,8 @@ function Layout() {
         const now = new Date();
         const expires = new Date(licenseDetails.expiresAt);
         if (now > expires) {
-           Logger.log("🕒 El tiempo de licencia ha expirado. Re-verificando estado...");
-           initializeApp(); 
+          Logger.log("🕒 El tiempo de licencia ha expirado. Re-verificando estado...");
+          initializeApp();
         }
       }
     }, 60000);
@@ -49,8 +49,13 @@ function Layout() {
 
   return (
     <div className="app-layout">
-      <Toaster 
+      <Toaster
         position="top-center"
+        containerStyle={{
+          zIndex: 99999999, // Un número ridículamente alto para asegurar que gane siempre
+          top: 20 // Opcional: para que no quede pegado al borde exacto si lo deseas
+        }}
+        // -------------------------
         toastOptions={{
           style: {
             background: '#333',
@@ -68,7 +73,7 @@ function Layout() {
           },
         }}
       />
-      
+
       <Navbar />
 
       <div className="content-wrapper">
@@ -82,7 +87,7 @@ function Layout() {
       <MessageModal />
       <DataSafetyModal />
       <BackupReminder />
-      <InstallPrompt /> 
+      <InstallPrompt />
       {showAssistantBot && <AssistantBot />}
 
     </div>

@@ -1,41 +1,38 @@
-// src/components/pos/LayawayModal.jsx
+// components/pos/LayawayModal.jsx - VERSIÓN CORREGIDA
 import React, { useState, useEffect } from 'react';
 import { loadData, STORES } from '../../services/database';
 import QuickAddCustomerModal from '../common/QuickAddCustomerModal';
-import './LayawayModal.css'; // Importamos los nuevos estilos exclusivos
+import { useCaja } from '../../hooks/useCaja'; // ✅ AGREGADO
+import { showMessageModal } from '../../services/utils';
+import Logger from '../../services/Logger';
+import './LayawayModal.css';
 
 export default function LayawayModal({ show, onClose, onConfirm, total, customer: preSelectedCustomer }) {
-    // Estados del Apartado
     const [initialPayment, setInitialPayment] = useState('');
     const [deadline, setDeadline] = useState('');
     
-    // Estados para búsqueda de Cliente
     const [customers, setCustomers] = useState([]);
     const [customerSearch, setCustomerSearch] = useState('');
     const [filteredCustomers, setFilteredCustomers] = useState([]);
     const [selectedCustomer, setSelectedCustomer] = useState(null);
     const [isQuickAddOpen, setIsQuickAddOpen] = useState(false);
 
+    // ✅ NUEVO: Hook de caja
+    const { cajaActual } = useCaja();
+
     useEffect(() => {
         if (show) {
-            // 1. Configurar fecha límite por defecto (30 días)
             const date = new Date();
             date.setDate(date.getDate() + 30);
             setDeadline(date.toISOString().split('T')[0]);
-            
-            // 2. Sugerir un 30% inicial
-            // const suggestedInit = (total * 0.30).toFixed(2);
-            // setInitialPayment(suggestedInit); 
-            setInitialPayment(''); // O dejarlo vacío para que el usuario decida
+            setInitialPayment('');
 
-            // 3. Cargar clientes
             const fetchCustomers = async () => {
                 const data = await loadData(STORES.CUSTOMERS);
                 setCustomers(data || []);
             };
             fetchCustomers();
 
-            // 4. Preselección
             if (preSelectedCustomer) {
                 setSelectedCustomer(preSelectedCustomer);
             } else {
@@ -46,7 +43,6 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
         }
     }, [show, preSelectedCustomer, total]);
 
-    // --- Lógica de Búsqueda ---
     const handleCustomerSearch = (e) => {
         const query = e.target.value;
         setCustomerSearch(query);
@@ -73,35 +69,70 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
         setIsQuickAddOpen(false);
     };
 
-    // --- Cálculos ---
     if (!show) return null;
 
     const initialAmount = Number(initialPayment) || 0;
     const remaining = total - initialAmount;
     const percentage = total > 0 ? (initialAmount / total) * 100 : 0;
-    const minInitialPayment = total * 0.10; // 10% mínimo obligatorio en sistema (puedes ajustar)
 
     const handleSubmit = (e) => {
         e.preventDefault();
+
+        // ✅ VALIDACIÓN 1: CLIENTE OBLIGATORIO
         if (!selectedCustomer) {
             alert("Es obligatorio asignar un cliente.");
             return;
         }
+
+        // ✅ VALIDACIÓN 2: MONTO COHERENTE
         if (remaining < 0) {
             alert("El abono no puede ser mayor al total.");
             return;
         }
 
+        // ✅ VALIDACIÓN 3: CAJA ABIERTA (SI HAY ABONO INICIAL)
+        if (initialAmount > 0 && (!cajaActual || cajaActual.estado !== 'abierta')) {
+            showMessageModal(
+                '⚠️ CAJA CERRADA\n\nNecesitas abrir una caja antes de recibir el abono inicial.',
+                null,
+                { type: 'warning' }
+            );
+            return;
+        }
+
+        // ✅ VALIDACIÓN 4: LÍMITE DE CRÉDITO
+        const deudaActual = selectedCustomer.debt || 0;
+        const limiteCredito = selectedCustomer.creditLimit || 0;
+
+        if (limiteCredito > 0 && (deudaActual + remaining) > limiteCredito) {
+            showMessageModal(
+                `⚠️ LÍMITE DE CRÉDITO EXCEDIDO\n\n` +
+                `Cliente: ${selectedCustomer.name}\n` +
+                `Deuda actual: $${deudaActual.toFixed(2)}\n` +
+                `Saldo apartado: $${remaining.toFixed(2)}\n` +
+                `Total acumulado: $${(deudaActual + remaining).toFixed(2)}\n\n` +
+                `Límite configurado: $${limiteCredito.toFixed(2)}\n\n` +
+                `Opciones:\n` +
+                `• Aumentar el abono inicial\n` +
+                `• Incrementar el límite del cliente\n` +
+                `• Elegir menos productos`,
+                null,
+                { type: 'error' }
+            );
+            return;
+        }
+
+        // ✅ TODO OK - PROCEDER
         onConfirm({
             initialPayment: initialAmount,
             deadline,
-            customer: selectedCustomer
+            customer: selectedCustomer,
+            cajaId: cajaActual?.id || null // ✅ PASAMOS EL ID DE LA CAJA
         });
     };
 
     return (
         <>
-            {/* Overlay con Z-Index 10000 para tapar OrderSummary */}
             <div className="layaway-modal-overlay">
                 <div className="layaway-modal-content">
                     
@@ -114,7 +145,7 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                     <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
                         <div className="layaway-body">
                             
-                            {/* --- SECCIÓN 1: CLIENTE --- */}
+                            {/* SECCIÓN 1: CLIENTE */}
                             <div className="layaway-section-title">Información del Cliente</div>
                             
                             {!selectedCustomer ? (
@@ -135,7 +166,6 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                         + Nuevo
                                     </button>
 
-                                    {/* Dropdown de resultados */}
                                     {filteredCustomers.length > 0 && (
                                         <div className="search-dropdown">
                                             {filteredCustomers.map(c => (
@@ -145,6 +175,11 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                                     onClick={() => handleCustomerClick(c)}
                                                 >
                                                     <strong>{c.name}</strong> <small>({c.phone})</small>
+                                                    {c.creditLimit > 0 && (
+                                                        <span style={{fontSize:'0.75rem', color:'#718096'}}>
+                                                            {' '}Límite: ${c.creditLimit}
+                                                        </span>
+                                                    )}
                                                 </div>
                                             ))}
                                         </div>
@@ -155,6 +190,13 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                     <div className="customer-info">
                                         <strong>{selectedCustomer.name}</strong>
                                         <span>📞 {selectedCustomer.phone}</span>
+                                        {/* ✅ MOSTRAR INFO DE CRÉDITO */}
+                                        {selectedCustomer.creditLimit > 0 && (
+                                            <span style={{fontSize:'0.8rem', color:'#4a5568'}}>
+                                                💳 Límite: ${selectedCustomer.creditLimit} | 
+                                                Deuda: ${(selectedCustomer.debt || 0).toFixed(2)}
+                                            </span>
+                                        )}
                                     </div>
                                     <button 
                                         type="button" 
@@ -166,7 +208,7 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                 </div>
                             )}
 
-                            {/* --- SECCIÓN 2: FINANZAS --- */}
+                            {/* SECCIÓN 2: FINANZAS */}
                             <div className="layaway-section-title">Plan de Pago</div>
                             
                             <div className="financial-grid">
@@ -189,6 +231,12 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                     <small style={{ fontSize: '0.75rem', color: '#b2bec3' }}>
                                         Mínimo sugerido: ${(total * 0.10).toFixed(2)}
                                     </small>
+                                    {/* ✅ ADVERTENCIA SI NO HAY CAJA */}
+                                    {initialAmount > 0 && (!cajaActual || cajaActual.estado !== 'abierta') && (
+                                        <small style={{ fontSize: '0.75rem', color: '#e53e3e', marginTop: '5px', display: 'block' }}>
+                                            ⚠️ Necesitas abrir una caja primero
+                                        </small>
+                                    )}
                                 </div>
 
                                 <div className="input-group">
@@ -196,7 +244,7 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                     <input 
                                         type="date" 
                                         className="input-financial"
-                                        style={{ paddingLeft: '10px' }} // Ajuste porque no lleva $
+                                        style={{ paddingLeft: '10px' }}
                                         value={deadline}
                                         onChange={e => setDeadline(e.target.value)}
                                         required
@@ -204,7 +252,7 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                 </div>
                             </div>
 
-                            {/* --- SECCIÓN 3: RESUMEN VISUAL --- */}
+                            {/* SECCIÓN 3: RESUMEN VISUAL */}
                             <div className="summary-box">
                                 <div className="summary-row row-total">
                                     <span>Total del Pedido:</span>
@@ -219,7 +267,6 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                                     <span>${remaining.toFixed(2)}</span>
                                 </div>
 
-                                {/* Barra de progreso visual */}
                                 <div className="progress-bar-bg">
                                     <div 
                                         className="progress-bar-fill" 
@@ -233,12 +280,17 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
 
                         </div>
 
-                        {/* Footer Buttons */}
+                        {/* Footer */}
                         <div className="layaway-footer">
                             <button 
                                 type="submit" 
                                 className="btn-confirm-layaway"
-                                disabled={!selectedCustomer || remaining < 0 || initialAmount <= 0}
+                                disabled={
+                                    !selectedCustomer || 
+                                    remaining < 0 || 
+                                    initialAmount < 0 ||
+                                    (initialAmount > 0 && (!cajaActual || cajaActual.estado !== 'abierta'))
+                                }
                             >
                                 CONFIRMAR APARTADO
                             </button>
@@ -247,7 +299,6 @@ export default function LayawayModal({ show, onClose, onConfirm, total, customer
                 </div>
             </div>
 
-            {/* Modal para crear cliente si no existe */}
             {isQuickAddOpen && (
                 <QuickAddCustomerModal
                     show={true}
