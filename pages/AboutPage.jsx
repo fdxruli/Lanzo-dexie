@@ -1,9 +1,8 @@
 // src/pages/AboutPage.jsx
 import React, { useState } from 'react';
 import {
-  Box, WifiOff, BarChart3, ShieldCheck,
-  Map, ExternalLink, MessageCircle, Bug, Lightbulb, Heart,
-  Layers, Zap, Database
+  Box, BarChart3, ShieldCheck,
+  Map, ExternalLink, Bug, Lightbulb, Mail // Importamos Mail y quitamos MessageCircle si ya no se usa
 } from 'lucide-react';
 import { useProductStore } from '../store/useProductStore';
 import Logo from '../components/common/Logo';
@@ -12,15 +11,24 @@ import './AboutPage.css';
 
 const APP_VERSION = `v${import.meta.env.VITE_APP_VERSION}`;
 
-const getWhatsAppLink = (type, data) => {
-  const YOUR_WHATSAPP_NUMBER = import.meta.env.VITE_SUPPORT_PHONE;
-  let message = '';
+// --- LÓGICA DE CORREO ELECTRÓNICO ---
+const getEmailLink = (type, data) => {
+  // TODO: Reemplaza con el correo real de soporte de tu negocio
+  const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL; 
+  
+  let subject = '';
+  let body = '';
+
   if (type === 'bug') {
-    message = `🚨 *Reporte de Error - Lanzo POS*\n\n*Acción:* ${data.action}\n*Error:* ${data.error}\n*Dispositivo:* ${data.device}\n`;
+    subject = `Reporte de Error [${APP_VERSION}] - Lanzo POS`;
+    body = `Hola equipo de soporte,\n\nHe encontrado un problema:\n\n* Acción que realizaba: ${data.action}\n* Lo que pasó (Error): ${data.error}\n* Dispositivo: ${data.device}\n\nGracias.`;
   } else {
-    message = `💡 *Sugerencia - Lanzo POS*\n\n*Idea:* ${data.idea}\n*Beneficio:* ${data.benefit}\n`;
+    subject = `Sugerencia de Función - Lanzo POS`;
+    body = `Hola equipo,\n\nTengo una idea para mejorar Lanzo:\n\n* Mi idea: ${data.idea}\n* Beneficio: ${data.benefit}\n\nSaludos.`;
   }
-  return `https://wa.me/${YOUR_WHATSAPP_NUMBER}?text=${encodeURIComponent(message)}`;
+
+  // Generamos el enlace mailto
+  return `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
 };
 
 export default function AboutPage() {
@@ -34,7 +42,7 @@ export default function AboutPage() {
         fields: [
           { id: 'action', label: '¿Qué estabas haciendo?', type: 'textarea' },
           { id: 'error', label: '¿Qué pasó? (Describe el error)', type: 'textarea' },
-          { id: 'device', label: 'Tu Dispositivo', type: 'input' }
+          { id: 'device', label: 'Tu Dispositivo (Ej. Android, PC)', type: 'input' }
         ]
       });
     } else {
@@ -49,7 +57,8 @@ export default function AboutPage() {
   };
 
   const handleSubmitContact = (formData) => {
-    window.open(getWhatsAppLink(modalInfo.type, formData), '_blank');
+    // Usamos la nueva función de Email
+    window.location.href = getEmailLink(modalInfo.type, formData);
     setModalInfo({ show: false, type: '', title: '', fields: [] });
   };
 
@@ -73,146 +82,100 @@ export default function AboutPage() {
 
       <div className="about-grid-layout">
 
-        {/* --- COLUMNA IZQUIERDA (Funcionalidades Detalladas) --- */}
+        {/* --- COLUMNA IZQUIERDA --- */}
         <div className="about-col-left">
-
           <h3 className="section-header">¿Qué puedes hacer con Lanzo?</h3>
-
-          {/* 2. BENTO GRID DE CARACTERÍSTICAS (Más detallado) */}
+          
           <div className="bento-grid">
-
-            {/* Tarjeta 1: Gestión Avanzada */}
             <div className="bento-card feature-inventory">
               <div className="bento-header">
                 <div className="bento-icon"><Box size={22} /></div>
                 <h4>Gestión Profesional</h4>
               </div>
               <p>
-                No solo guardas productos. Creas <strong>recetas</strong> (restaurantes), gestionas <strong>tallas y colores</strong> (ropa) y controlas <strong>lotes con caducidad</strong> (farmacia/abarrotes).
+                No solo guardas productos. Creas <strong>recetas</strong>, gestionas <strong>variantes</strong> y controlas <strong>lotes</strong>.
               </p>
             </div>
 
-            {/* Tarjeta 2: Offline First */}
             <div className="bento-card feature-offline">
               <div className="bento-header">
                 <div className="bento-icon"><Database size={22} /></div>
                 <h4>Privacidad Total (Local)</h4>
               </div>
               <p>
-                Tus datos viven en <strong>este dispositivo</strong>. No en la nube de un tercero. El sistema es ultra-rápido porque no espera a internet para cobrar.
+                Tus datos viven en <strong>este dispositivo</strong>. Privacidad y velocidad garantizadas.
               </p>
             </div>
 
-            {/* Tarjeta 3: Finanzas Reales */}
             <div className="bento-card feature-stats">
               <div className="bento-header">
                 <div className="bento-icon"><BarChart3 size={22} /></div>
                 <h4>Finanzas Reales</h4>
               </div>
               <p>
-                Calculamos la <strong>utilidad neta</strong> descontando costos de insumos al momento. Sabes exactamente cuánto ganas, no solo cuánto vendes.
+                Calculamos la <strong>utilidad neta</strong> real descontando costos al momento.
               </p>
             </div>
 
-            {/* Tarjeta 4: Seguridad */}
             <div className="bento-card feature-security">
               <div className="bento-header">
                 <div className="bento-icon"><ShieldCheck size={22} /></div>
                 <h4>Seguridad de Datos</h4>
               </div>
               <p>
-                Tú tienes el control. Exporta tus copias de seguridad en formato estándar (JSON/CSV) cuando quieras. Tu información es tuya.
+                Exporta tus copias de seguridad cuando quieras. Tu información es tuya.
               </p>
             </div>
           </div>
 
-          {/* 3. ROADMAP (Hoja de Ruta - ACTUALIZADA) */}
           <div className="about-card roadmap-card">
             <div className="card-header-row">
               <Map size={24} className="icon-purple" />
               <h3>El Futuro de Lanzo</h3>
             </div>
-            <p className="card-intro">Estamos construyendo constantemente. Esto es lo próximo en llegar:</p>
-
+            <p className="card-intro">Estamos construyendo constantemente. Esto es lo próximo:</p>
             <div className="roadmap-list">
-              <div className="roadmap-item done">
-                <span className="check">✓</span>
-                <span>Modo Oscuro / Claro Automático</span>
-              </div>
-              <div className="roadmap-item done">
-                <span className="check">✓</span>
-                <span>Soporte para Escáner Códigos de Barras mediante tu camara</span>
-              </div>
-              <div className="roadmap-item done">
-                <span className="check">✓</span>
-                <span>Gestión de Recetas e Insumos (KDS-Restaurantes)</span>
-              </div>
-              <div className="roadmap-item upcoming">
-                <span className="dot">○</span>
-                <span>Envio de cotizaciones</span>
-              </div>
-              <div className="roadmap-item upcoming">
-                <span className="dot">○</span>
-                <span>Sincronización Multi-dispositivo (función PRO de pago)</span>
-              </div>
-              <div className="roadmap-item upcoming">
-                <span className="dot">○</span>
-                <span>Soporte para lectores de barras USB/Bluetooth (PC)</span>
-              </div>
-              <div className="roadmap-item upcoming">
-                <span className="dot">○</span>
-                <span>Soporte para impresoras termicas USB/Bluetooth (PC-Moviles)</span>
-              </div>
+              <div className="roadmap-item done"><span className="check">✓</span><span>Modo Oscuro / Claro Automático</span></div>
+              <div className="roadmap-item done"><span className="check">✓</span><span>Escáner de Barras por Cámara</span></div>
+              <div className="roadmap-item done"><span className="check">✓</span><span>Gestión de Recetas (KDS)</span></div>
+              <div className="roadmap-item upcoming"><span className="dot">○</span><span>Envío de cotizaciones</span></div>
+              <div className="roadmap-item upcoming"><span className="dot">○</span><span>Sincronización Multi-dispositivo</span></div>
             </div>
           </div>
-
         </div>
 
-        {/* --- COLUMNA DERECHA (Social & Soporte) --- */}
+        {/* --- COLUMNA DERECHA --- */}
         <div className="about-col-right">
 
-          {/* 4. TARJETA PATROCINADOR PREMIUM */}
+          {/* SPONSOR */}
           <div className="sponsor-card-premium">
             <div className="sponsor-bg-effect"></div>
             <div className="sponsor-content">
-              <div className="sponsor-header">
-                <span>Impulsado por</span>
-              </div>
-
+              <div className="sponsor-header"><span>Impulsado por</span></div>
               <h2 className="sponsor-name">Entre Alas</h2>
-
-              {/* --- AQUÍ ESTÁ EL CAMBIO DE COPYWRITING --- */}
               <div className="sponsor-tagline" style={{ maxWidth: '450px', margin: '0 auto 2rem auto', lineHeight: '1.6' }}>
                 <p style={{ margin: 0, fontSize: '1.1rem', fontWeight: '500' }}>
                   De <strong>Dark Kitchen</strong> a tu Aliado Tecnológico.
                 </p>
                 <p style={{ margin: '8px 0 0 0', fontSize: '0.9rem', opacity: 0.9 }}>
-                  Nacimos vendiendo alitas y entendemos el reto. Por eso creamos herramientas para que nuevos emprendedores y negocios veteranos escalen sin límites.
+                  Creamos herramientas para que emprendedores escalen sin límites.
                 </p>
               </div>
-              {/* ------------------------------------------- */}
-
               <div className="impact-counter">
-                <span className="impact-label">Actualmente gestionando</span>
+                <span className="impact-label">Gestionando</span>
                 <span className="impact-number">{productCount}</span>
-                <span className="impact-label">productos en tu catálogo</span>
+                <span className="impact-label">productos</span>
               </div>
-
-              <a
-                href="https://ea-panel.vercel.app"
-                target="_blank"
-                rel="noopener noreferrer"
-                className="btn-visit-sponsor"
-              >
+              <a href="https://ea-panel.vercel.app" target="_blank" rel="noopener noreferrer" className="btn-visit-sponsor">
                 Ver nuestra web <ExternalLink size={16} />
               </a>
             </div>
           </div>
 
-          {/* CONTACTO & SOPORTE */}
+          {/* CONTACTO ACTUALIZADO A EMAIL */}
           <div className="about-card contact-card-modern">
-            <h3>Tu opinión moldea el software</h3>
-            <p>¿Encontraste un error o tienes una idea millonaria para una función? Cuéntanos.</p>
+            <h3>Ayúdanos a mejorar</h3>
+            <p>¿Encontraste un error o tienes una sugerencia? Envíanos un correo.</p>
 
             <div className="contact-actions">
               <button onClick={() => handleOpenModal('bug')} className="btn-contact btn-bug">
@@ -224,8 +187,8 @@ export default function AboutPage() {
             </div>
 
             <div className="contact-footer">
-              <small>Atención directa vía WhatsApp Entre Alas</small>
-              <MessageCircle size={14} className="icon-whatsapp" />
+              <small>Soporte oficial vía Correo Electrónico</small>
+              <Mail size={14} className="icon-whatsapp" /> {/* Reutilizamos la clase icon-whatsapp para mantener estilos o cámbiala si prefieres */}
             </div>
           </div>
 
@@ -238,6 +201,7 @@ export default function AboutPage() {
         onSubmit={handleSubmitContact}
         title={modalInfo.title}
         fields={modalInfo.fields}
+        submitLabel="Generar Correo" // Pasamos el nuevo texto del botón
       />
     </div>
   );

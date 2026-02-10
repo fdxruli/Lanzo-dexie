@@ -2,7 +2,7 @@
 import { create } from 'zustand';
 import { roundCurrency } from '../services/utils';
 // Asegúrate que esta ruta apunte a tu nuevo index
-import { loadData, saveData, saveBulk, deleteData, STORES, initDB } from '../services/db/index'; 
+import { loadData, saveData, saveBulk, deleteData, STORES, initDB } from '../services/db/index';
 import StatsWorker from '../workers/stats.worker.js?worker';
 import Logger from '../services/Logger';
 
@@ -21,24 +21,24 @@ async function getInventoryValueOptimized(db) {
 
   // Usamos transacción de Dexie ('r' = readonly)
   await db.transaction('r', [db.table(STORES.PRODUCT_BATCHES), db.table(STORES.MENU)], async () => {
-      
-      // 1. Sumar Lotes Activos
-      await db.table(STORES.PRODUCT_BATCHES)
-        .filter(batch => batch.isActive && batch.stock > 0)
-        .each(batch => {
-            calculatedValue += roundCurrency(batch.cost * batch.stock);
-        });
 
-      // 2. Sumar Productos sin Lotes (Simples) y llenar Mapa de Costos
-      await db.table(STORES.MENU).each(p => {
-          // Guardar costo para cálculos de ventas históricas
-          productCostMap.set(p.id, p.cost || 0);
-
-          // Si NO usa lotes y tiene stock, sumamos al valor
-          if (!p.batchManagement?.enabled && p.trackStock && p.stock > 0) {
-              calculatedValue += roundCurrency((p.cost || 0) * p.stock);
-          }
+    // 1. Sumar Lotes Activos
+    await db.table(STORES.PRODUCT_BATCHES)
+      .filter(batch => batch.isActive && batch.stock > 0)
+      .each(batch => {
+        calculatedValue += roundCurrency(batch.cost * batch.stock);
       });
+
+    // 2. Sumar Productos sin Lotes (Simples) y llenar Mapa de Costos
+    await db.table(STORES.MENU).each(p => {
+      // Guardar costo para cálculos de ventas históricas
+      productCostMap.set(p.id, p.cost || 0);
+
+      // Si NO usa lotes y tiene stock, sumamos al valor
+      if (!p.batchManagement?.enabled && p.trackStock && p.stock > 0) {
+        calculatedValue += roundCurrency((p.cost || 0) * p.stock);
+      }
+    });
   });
 
   await saveData(STORES.STATS, { id: 'inventory_summary', value: calculatedValue });
@@ -52,34 +52,34 @@ async function rebuildDailyStatsFromSales(db, productCostMap) {
 
   // Iterar todas las ventas usando Dexie
   await db.table(STORES.SALES).each(sale => {
-      if (sale.fulfillmentStatus !== 'cancelled') {
-          const dateKey = new Date(sale.timestamp).toISOString().split('T')[0];
+    if (sale.fulfillmentStatus !== 'cancelled') {
+      const dateKey = new Date(sale.timestamp).toISOString().split('T')[0];
 
-          if (!dailyMap.has(dateKey)) {
-            dailyMap.set(dateKey, { id: dateKey, date: dateKey, revenue: 0, profit: 0, orders: 0, itemsSold: 0 });
-          }
-
-          const dayStat = dailyMap.get(dateKey);
-          dayStat.revenue += (sale.total || 0);
-          dayStat.orders += 1;
-
-          if (sale.items && Array.isArray(sale.items)) {
-            sale.items.forEach(item => {
-              const qty = parseFloat(item.quantity) || 0;
-              dayStat.itemsSold += qty;
-              
-              let itemCost = parseFloat(item.cost);
-              if (isNaN(itemCost) || itemCost === 0) {
-                const realId = item.parentId || item.id;
-                itemCost = productCostMap.get(realId) || 0;
-              }
-              
-              const itemPrice = parseFloat(item.price) || 0;
-              const profit = roundCurrency(itemPrice - itemCost) * qty;
-              dayStat.profit += profit;
-            });
-          }
+      if (!dailyMap.has(dateKey)) {
+        dailyMap.set(dateKey, { id: dateKey, date: dateKey, revenue: 0, profit: 0, orders: 0, itemsSold: 0 });
       }
+
+      const dayStat = dailyMap.get(dateKey);
+      dayStat.revenue += (sale.total || 0);
+      dayStat.orders += 1;
+
+      if (sale.items && Array.isArray(sale.items)) {
+        sale.items.forEach(item => {
+          const qty = parseFloat(item.quantity) || 0;
+          dayStat.itemsSold += qty;
+
+          let itemCost = parseFloat(item.cost);
+          if (isNaN(itemCost) || itemCost === 0) {
+            const realId = item.parentId || item.id;
+            itemCost = productCostMap.get(realId) || 0;
+          }
+
+          const itemPrice = parseFloat(item.price) || 0;
+          const profit = roundCurrency(itemPrice - itemCost) * qty;
+          dayStat.profit += profit;
+        });
+      }
+    }
   });
 
   const dailyStatsArray = Array.from(dailyMap.values());
@@ -111,20 +111,32 @@ export const useStatsStore = create((set, get) => ({
     try {
       // 1. Lanzar Worker para Inventario (En paralelo)
       const workerPromise = new Promise((resolve, reject) => {
-          const worker = new StatsWorker();
-          worker.onmessage = (e) => {
-            const { success, payload } = e.data;
-            if (success && e.data.type === 'STATS_RESULT') {
-              resolve(payload.inventoryValue);
-              worker.terminate();
-            }
-          };
-          worker.onerror = (err) => {
-             worker.terminate();
-             Logger.error("Worker failed", err);
-             resolve(0); 
-          };
-          worker.postMessage({ type: 'CALCULATE_STATS' });
+        const worker = new StatsWorker();
+
+        worker.onmessage = (e) => {
+          const { success, type, payload, error } = e.data;
+
+          // CASO DE ÉXITO
+          if (success && type === 'STATS_RESULT') {
+            resolve(payload.inventoryValue); //
+            worker.terminate();
+          }
+          // CASO DE ERROR (Esto es lo que faltaba)
+          else if (!success || type === 'ERROR') {
+            Logger.error("Worker reportó un error:", error);
+            resolve(0); // Resolvemos con 0 para no bloquear la app
+            worker.terminate();
+          }
+          // Si es tipo 'PROGRESS', lo ignoramos y dejamos la promesa pendiente
+        };
+
+        worker.onerror = (err) => {
+          worker.terminate();
+          Logger.error("Worker falló al iniciar:", err);
+          resolve(0);
+        };
+
+        worker.postMessage({ type: 'CALCULATE_STATS' });
       });
 
       // 2. Cargar y Sumar Historial de Ventas (En el hilo principal)
@@ -132,23 +144,23 @@ export const useStatsStore = create((set, get) => ({
       let dailyStats = await loadData(STORES.DAILY_STATS);
 
       const hasDailyStats = dailyStats && dailyStats.length > 0;
-      
+
       if (forceRebuild || !hasDailyStats) {
-         // CORRECCIÓN PRINCIPAL: Usar db.table().count() en lugar de transaction().objectStore()
-         const salesCount = await db.table(STORES.SALES).count();
-         
-         if (salesCount > 0) {
-            const { productCostMap } = await getInventoryValueOptimized(db);
-            dailyStats = await rebuildDailyStatsFromSales(db, productCostMap);
-         }
+        // CORRECCIÓN PRINCIPAL: Usar db.table().count() en lugar de transaction().objectStore()
+        const salesCount = await db.table(STORES.SALES).count();
+
+        if (salesCount > 0) {
+          const { productCostMap } = await getInventoryValueOptimized(db);
+          dailyStats = await rebuildDailyStatsFromSales(db, productCostMap);
+        }
       }
 
       // 3. Sumar los totales globales
       const totals = (dailyStats || []).reduce((acc, day) => ({
-          totalRevenue: acc.totalRevenue + (day.revenue || 0),
-          totalNetProfit: acc.totalNetProfit + (day.profit || 0),
-          totalOrders: acc.totalOrders + (day.orders || 0),
-          totalItemsSold: acc.totalItemsSold + (day.itemsSold || 0),
+        totalRevenue: acc.totalRevenue + (day.revenue || 0),
+        totalNetProfit: acc.totalNetProfit + (day.profit || 0),
+        totalOrders: acc.totalOrders + (day.orders || 0),
+        totalItemsSold: acc.totalItemsSold + (day.itemsSold || 0),
       }), { totalRevenue: 0, totalNetProfit: 0, totalOrders: 0, totalItemsSold: 0 });
 
       // 4. Esperar el resultado del inventario
