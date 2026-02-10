@@ -8,7 +8,6 @@ import {
   Sparkles, HelpCircle, Lightbulb,
 } from 'lucide-react';
 import './AssistantBot.css';
-
 // --- STORES ---
 import { useOrderStore } from '../../store/useOrderStore';
 import { useProductStore } from '../../store/useProductStore';
@@ -42,6 +41,8 @@ const AssistantBot = () => {
   const stats = useStatsStore((state) => state.stats);
   const licenseDetails = useAppStore((state) => state.licenseDetails);
   const companyProfile = useAppStore((state) => state.companyProfile);
+
+  const showAssistantBot = useAppStore((state) => state.showAssistantBot);
 
   // 2. CÁLCULOS DERIVADOS Y DATA PARA EL BOT
   const botData = useMemo(() => {
@@ -198,6 +199,10 @@ const AssistantBot = () => {
   const hasActiveAlert = showGlobalAlert || (criticalAlert && criticalAlert.severity === 'critical');
   const hasItemsInCart = cartOrder.length > 0;
 
+  if (!showAssistantBot && !showGlobalAlert) {
+    return null;
+  }
+
   return (
     <div ref={botRef} className={`lanzo-bot-container ${isOpen ? 'open' : 'closed'} ${hasItemsInCart ? 'has-items' : ''}`}>
 
@@ -245,7 +250,7 @@ const AssistantBot = () => {
                     className="action-btn"
                   >
                     <Wrench size={16} style={{ marginRight: 5 }} />
-                    Ir a Reparación
+                    Ir Ahora
                   </button>
                 )}
                 <button onClick={handleDismissAlert} className="dismiss-link">
