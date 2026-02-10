@@ -131,26 +131,21 @@ const AssistantBot = () => {
     setIsTyping(true);
 
     try {
-      // 1. Detectar intención
-      const intent = detectIntent(currentInput);
-
-      // 2. Extraer entidades (fechas, nombres de productos)
-      const entities = extractEntities(currentInput);
-
-      // 3. Generar respuesta usando el motor de inteligencia
-      // Pasamos botData por si se requiere contexto adicional
-      const aiResponse = await generateResponse(intent, entities, botData);
+      const intent = detectIntent(userInput);
+      const entities = extractEntities(userInput, menuProducts);
+      entities.originalMessage = userInput;
+      const response = await generateResponse(intent, entities, botData);
 
       // 4. Formatear para el chat
       const botMessage = {
         type: 'bot',
         timestamp: Date.now(),
         // Mapeamos la estructura de botIntelligence a lo que usa el render
-        title: aiResponse.title,
-        message: aiResponse.message,
-        tips: aiResponse.tips || [],
-        actions: aiResponse.actions || [], // Ahora es un array
-        options: aiResponse.options || [] // Por si devuelve opciones de menú
+        title: response.title,
+        message: response.message,
+        tips: response.tips || [],
+        actions: response.actions || [], // Ahora es un array
+        options: response.options || [] // Por si devuelve opciones de menú
       };
 
       setMessages(prev => [...prev, botMessage]);
@@ -201,9 +196,10 @@ const AssistantBot = () => {
   }, [isOpen]);
 
   const hasActiveAlert = showGlobalAlert || (criticalAlert && criticalAlert.severity === 'critical');
+  const hasItemsInCart = cartOrder.length > 0;
 
   return (
-    <div ref={botRef} className={`lanzo-bot-container ${isOpen ? 'open' : 'closed'}`}>
+    <div ref={botRef} className={`lanzo-bot-container ${isOpen ? 'open' : 'closed'} ${hasItemsInCart ? 'has-items' : ''}`}>
 
       {isOpen && (
         <div className="lanzo-bot-card animate-pop-in">
@@ -281,20 +277,25 @@ const AssistantBot = () => {
                     <>
                       {messages.map((msg, idx) => (
                         <div key={idx} className={`chat-message ${msg.type}`}>
+
                           {msg.type === 'bot' && (
                             <div className="message-avatar">
                               <Sparkles size={14} />
                             </div>
                           )}
+
                           <div className="message-bubble">
-                            {/* Soporte para Título (Nuevo en botIntelligence) */}
+                            {/* Soporte para Título */}
                             {msg.title && (
                               <strong style={{ display: 'block', marginBottom: '5px', color: 'var(--primary-color)' }}>
                                 {msg.title}
                               </strong>
                             )}
 
-                            <p style={{ whiteSpace: 'pre-line' }}>{msg.message || msg.text}</p>
+                            {/* Renderiza el mensaje o el texto del usuario */}
+                            <p style={{ whiteSpace: 'pre-line', margin: 0 }}>
+                              {msg.message || msg.text}
+                            </p>
 
                             {/* Renderizar TIPS si existen */}
                             {msg.tips && msg.tips.length > 0 && (
@@ -317,7 +318,6 @@ const AssistantBot = () => {
                                     className={`inline-action-btn ${act.highlight ? 'highlight' : ''}`}
                                     onClick={() => handleQuickAction(act)}
                                   >
-                                    {/* Si botIntelligence devuelve icono como string emoji o componente */}
                                     {typeof act.icon === 'string' ? act.icon : ''} {act.label}
                                   </button>
                                 ))}
@@ -331,7 +331,7 @@ const AssistantBot = () => {
                                   <button
                                     key={i}
                                     className="option-btn"
-                                    onClick={() => setUserInput(opt.query)} // Simplemente llenamos el input
+                                    onClick={() => setUserInput(opt.query)}
                                   >
                                     {opt.label}
                                   </button>

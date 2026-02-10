@@ -697,3 +697,20 @@
     height: 50px;
   }
 }
+
+@media (max-width: 768px) {
+  .lanzo-bot-container.has-items {
+    /* Subimos el botón. 
+       Generalmente la barra mide unos 60-70px, 
+       así que 90px asegura que quede flotando encima */
+    bottom: 150px !important; 
+  }
+
+  /* Opcional: Si el chat está abierto, también ajustamos la tarjeta 
+     para que no quede tapada por el teclado o la barra si fuera necesario,
+     aunque generalmente al abrir el chat queremos que ocupe todo. */
+  .lanzo-bot-container.has-items .lanzo-bot-card {
+    /* Ajuste ligero si es necesario */
+    bottom: 80px; 
+  }
+}

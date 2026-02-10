@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import './ContactModal.css'; // Aseguramos que se importen los nuevos estilos PRO
+import './ContactModal.css';
 
-export default function ContactModal({ show, onClose, onSubmit, title, fields }) {
+// Agregamos 'submitLabel' a las props con un valor por defecto
+export default function ContactModal({ show, onClose, onSubmit, title, fields, submitLabel = "Enviar Mensaje" }) {
   const [formData, setFormData] = useState({});
 
   useEffect(() => {
@@ -21,8 +22,8 @@ export default function ContactModal({ show, onClose, onSubmit, title, fields })
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSubmit(formData); // Envía los datos del formulario al padre
-    onClose(); // Cierra el modal
+    onSubmit(formData);
+    onClose();
   };
 
   if (!show) {
@@ -48,7 +49,7 @@ export default function ContactModal({ show, onClose, onSubmit, title, fields })
                   value={formData[field.id] || ''}
                   onChange={handleChange}
                   required
-                  autoFocus={field.id === fields[0].id} // Autoenfocar el primer campo
+                  autoFocus={field.id === fields[0].id}
                 />
               ) : (
                 <input
@@ -65,8 +66,9 @@ export default function ContactModal({ show, onClose, onSubmit, title, fields })
             </div>
           ))}
 
+          {/* Usamos la prop submitLabel para el texto del botón */}
           <button type="submit" className="btn btn-save">
-            Generar Mensaje de WhatsApp
+            {submitLabel}
           </button>
           <button type="button" className="btn btn-cancel" onClick={onClose}>
             Cancelar

@@ -5,13 +5,14 @@ import { sendWhatsAppMessage } from '../../services/utils';
 import './WelcomeModal.css';
 import Logger from '../../services/Logger';
 import { getStableDeviceId } from '../../services/supabase';
+import { Mail } from 'lucide-react';
 
 const supportFields = [
   { id: 'name', label: 'Tu Nombre', type: 'input' },
   { id: 'problem', label: 'Describe tu problema', type: 'textarea' }
 ];
 
-const SUPPORT_PHONE_NUMBER = import.meta.env.VITE_SUPPORT_PHONE;
+const SUPPORT_EMAIL = import.meta.env.VITE_SUPPORT_EMAIL;
 
 export default function WelcomeModal() {
   const [licenseKey, setLicenseKey] = useState('');
@@ -24,11 +25,11 @@ export default function WelcomeModal() {
 
   useEffect(() => {
     const handleOnline = () => {
-        setIsOnline(true);
-        setErrorMessage('');
+      setIsOnline(true);
+      setErrorMessage('');
     };
     const handleOffline = () => {
-        setIsOnline(false);
+      setIsOnline(false);
     };
 
     window.addEventListener('online', handleOnline);
@@ -43,7 +44,7 @@ export default function WelcomeModal() {
       }
     };
 
-    if(navigator.onLine) {
+    if (navigator.onLine) {
       prewarmIdenty();
     }
 
@@ -74,16 +75,16 @@ export default function WelcomeModal() {
     setErrorMessage('');
 
     try {
-        const result = await handleLogin(licenseKey);
-        
-        if (!result.success) {
-            setErrorMessage(result.message);
-        }
+      const result = await handleLogin(licenseKey);
+
+      if (!result.success) {
+        setErrorMessage(result.message);
+      }
     } catch (error) {
-        Logger.error("Error al validar licencia:", error);
-        setErrorMessage('❌ Error de conexión: No se pudo verificar la licencia. Intenta de nuevo.');
+      Logger.error("Error al validar licencia:", error);
+      setErrorMessage('❌ Error de conexión: No se pudo verificar la licencia. Intenta de nuevo.');
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
@@ -98,28 +99,30 @@ export default function WelcomeModal() {
     setErrorMessage('');
 
     try {
-        const result = await handleFreeTrial();
-        
-        if (!result.success) {
-            setErrorMessage(result.message || 'No se pudo activar la prueba.');
-        }
+      const result = await handleFreeTrial();
+
+      if (!result.success) {
+        setErrorMessage(result.message || 'No se pudo activar la prueba.');
+      }
     } catch (error) {
-        Logger.error("Error crítico en Trial:", error);
-        
-        if (error.message && (error.message.includes('fetch') || error.message.includes('Network'))) {
-            setErrorMessage('❌ Error de Red: No pudimos conectar con el servidor. Verifica tu conexión.');
-        } else {
-            setErrorMessage(`❌ Ocurrió un error inesperado: ${error.message}`);
-        }
+      Logger.error("Error crítico en Trial:", error);
+
+      if (error.message && (error.message.includes('fetch') || error.message.includes('Network'))) {
+        setErrorMessage('❌ Error de Red: No pudimos conectar con el servidor. Verifica tu conexión.');
+      } else {
+        setErrorMessage(`❌ Ocurrió un error inesperado: ${error.message}`);
+      }
     } finally {
-        setIsLoading(false);
+      setIsLoading(false);
     }
   };
 
-  const handleSubmitSupport = (formData) => {
-    const message = `¡Hola! Necesito soporte. Nombre: ${formData.name}. Problema: ${formData.problem}`;
-    sendWhatsAppMessage(SUPPORT_PHONE_NUMBER, message);
-    setIsContactOpen(false);
+  const handleSupportClick = () => {
+    const subject = encodeURIComponent("Ayuda con Acceso - Lanzo POS");
+    const body = encodeURIComponent("Hola equipo, tengo problemas para iniciar sesión o activar mi licencia. Mi dispositivo es: " + navigator.userAgent);
+
+    // Abrir cliente de correo predeterminado
+    window.location.href = `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}`;
   };
 
   return (
@@ -149,8 +152,8 @@ export default function WelcomeModal() {
               border: '1px solid #f87171',
               fontWeight: 'bold'
             }}>
-              📡 Sin conexión a internet. <br/>
-              <span style={{fontWeight: 'normal', fontSize: '0.8rem'}}>No podrás activar licencias hasta que te conectes.</span>
+              📡 Sin conexión a internet. <br />
+              <span style={{ fontWeight: 'normal', fontSize: '0.8rem' }}>No podrás activar licencias hasta que te conectes.</span>
             </div>
           )}
 
@@ -195,14 +198,14 @@ export default function WelcomeModal() {
             >
               {isLoading ? '⏳ Creando cuenta...' : 'Probar Gratis por 3 Meses'}
             </button>
-            
+
             {/* --- AQUÍ ESTÁ EL MENSAJE DE COPYWRITING AÑADIDO --- */}
-            <p style={{ 
-                marginTop: '12px', 
-                textAlign: 'center', 
-                fontSize: '0.85rem', 
-                color: '#6b7280',
-                lineHeight: '1.4'
+            <p style={{
+              marginTop: '12px',
+              textAlign: 'center',
+              fontSize: '0.85rem',
+              color: '#6b7280',
+              lineHeight: '1.4'
             }}>
               <strong>Sin presiones:</strong> Al terminar tu prueba, podrás renovar tu licencia <strong>totalmente gratis</strong> y seguir operando.
             </p>
@@ -212,14 +215,14 @@ export default function WelcomeModal() {
           <div className="welcome-footer">
             {/* ZONA DE MENSAJES DE ERROR */}
             {errorMessage && (
-              <div className="welcome-error-message" style={{ 
-                  color: '#dc2626', 
-                  backgroundColor: '#fef2f2', 
-                  padding: '10px', 
-                  borderRadius: '6px',
-                  marginTop: '10px',
-                  fontSize: '0.9rem',
-                  border: '1px solid #fecaca'
+              <div className="welcome-error-message" style={{
+                color: '#dc2626',
+                backgroundColor: '#fef2f2',
+                padding: '10px',
+                borderRadius: '6px',
+                marginTop: '10px',
+                fontSize: '0.9rem',
+                border: '1px solid #fecaca'
               }}>
                 {errorMessage}
               </div>
@@ -228,23 +231,29 @@ export default function WelcomeModal() {
             <button
               type="button"
               className="btn-support-link"
-              onClick={() => setIsContactOpen(true)}
-              style={{ marginTop: '15px' }}
+              onClick={handleSupportClick} // Llamamos a la nueva función
+              style={{
+                marginTop: '15px',
+                background: 'none',
+                border: 'none',
+                color: '#4b5563', // Un gris oscuro o el color de tu marca
+                textDecoration: 'underline',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                fontSize: '0.9rem',
+                width: '100%'
+              }}
             >
+              <Mail size={16} /> {/* Icono opcional */}
               ¿Tienes problemas? Contactar a Soporte
             </button>
           </div>
 
         </div>
       </div>
-
-      <ContactModal
-        show={isContactOpen}
-        onClose={() => setIsContactOpen(false)}
-        onSubmit={handleSubmitSupport}
-        title="Contactar a Soporte"
-        fields={supportFields}
-      />
     </>
   );
 }
