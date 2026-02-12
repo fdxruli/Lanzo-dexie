@@ -1,3 +1,6 @@
+// services/sales/stockValidation.js - VERSIÓN CORREGIDA
+// ✅ Restaura la detección de ingredientes eliminados (fantasma)
+
 export const validateStockBeforeSale = async ({
     itemsToProcess,
     productMap,
@@ -31,6 +34,7 @@ export const validateStockBeforeSale = async ({
         }
     });
 
+    // 🔥 CARGA DE STOCK FRESCO (Evita race conditions)
     const freshStockMap = new Map();
     if (uniqueIngredientIds.size > 0) {
         await Promise.all(Array.from(uniqueIngredientIds).map(async (id) => {
@@ -58,12 +62,14 @@ export const validateStockBeforeSale = async ({
             itemRequirements.set(id, (itemRequirements.get(id) || 0) + qty);
         };
 
+        // A) Receta Base
         if (productDef?.recipe?.length > 0) {
             productDef.recipe.forEach(ing => {
                 addRequirement(ing.ingredientId, ing.quantity * item.quantity);
             });
         }
 
+        // B) Modificadores
         if (Array.isArray(item.selectedModifiers)) {
             item.selectedModifiers.forEach(mod => {
                 if (mod.ingredientId) {
@@ -73,19 +79,36 @@ export const validateStockBeforeSale = async ({
             });
         }
 
+        // C) Producto Directo
         if (productDef?.trackStock && (!productDef.recipe || productDef.recipe.length === 0)) {
             addRequirement(realId, item.quantity);
         }
 
+        // --- 🔴 FASE DE VERIFICACIÓN (CON DETECCIÓN DE FANTASMAS) ---
         for (const [reqId, reqQty] of itemRequirements.entries()) {
+
+            // ✨ NUEVO: Detectar ingrediente eliminado (CRÍTICO)
+            const realIngData = freshStockMap.get(reqId);
+
+            if (!realIngData) {
+                // El ingrediente fue eliminado pero sigue en la receta
+                missingIngredients.push({
+                    productName: productDef?.name || 'Producto Desconocido',
+                    ingredientName: `⚠️ ERROR CRÍTICO: Ingrediente ID ${reqId} no existe (Fue eliminado)`,
+                    needed: reqQty,
+                    available: 0,
+                    unit: '❌'
+                });
+                continue; // Saltamos este ingrediente y seguimos validando los demás
+            }
+
+            // Verificar si existe en el simulador
             if (!simulatedStock.has(reqId)) continue;
 
             const currentAvailable = simulatedStock.get(reqId);
 
             if (currentAvailable < reqQty) {
-                const realIngData = freshStockMap.get(reqId);
-                if (!realIngData) continue;
-
+                // Evitar duplicados en el reporte
                 const alreadyListed = missingIngredients.some(m => m.ingredientName === realIngData.name);
 
                 if (!alreadyListed) {
