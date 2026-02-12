@@ -14,14 +14,16 @@ const SalesSystemTester = () => {
     const [isRunning, setIsRunning] = useState(false);
     const [progress, setProgress] = useState(0);
 
-    // Identificadores constantes para los datos de prueba
     const TEST_IDS = {
         CUSTOMER: 'TEST_SYS_CUSTOMER',
         ING_HARINA: 'TEST_SYS_ING_HARINA',
         ING_TOMATE: 'TEST_SYS_ING_TOMATE',
+        ING_QUESO: 'TEST_SYS_ING_QUESO', // ✅ NUEVO: Para probar ingredientes eliminados
         PROD_PIZZA: 'TEST_SYS_PROD_PIZZA',
         PROD_MEDICINA: 'TEST_SYS_PROD_MEDICINA',
-        BATCH_HARINA: 'TEST_SYS_BATCH_HARINA',
+        PROD_GENERICO: 'TEST_SYS_PROD_GENERICO', // ✅ NUEVO: Producto sin lotes
+        BATCH_HARINA_OLD: 'TEST_SYS_BATCH_HARINA_OLD', // ✅ NUEVO: Para probar FIFO
+        BATCH_HARINA_NEW: 'TEST_SYS_BATCH_HARINA_NEW',
         BATCH_TOMATE: 'TEST_SYS_BATCH_TOMATE',
         BATCH_MED: 'TEST_SYS_BATCH_MED'
     };
@@ -48,9 +50,12 @@ const SalesSystemTester = () => {
             await deleteData(STORES.CUSTOMERS, TEST_IDS.CUSTOMER);
             await deleteData(STORES.MENU, TEST_IDS.ING_HARINA);
             await deleteData(STORES.MENU, TEST_IDS.ING_TOMATE);
+            await deleteData(STORES.MENU, TEST_IDS.ING_QUESO);
             await deleteData(STORES.MENU, TEST_IDS.PROD_PIZZA);
             await deleteData(STORES.MENU, TEST_IDS.PROD_MEDICINA);
-            await deleteData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_HARINA);
+            await deleteData(STORES.MENU, TEST_IDS.PROD_GENERICO);
+            await deleteData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_HARINA_OLD);
+            await deleteData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_HARINA_NEW);
             await deleteData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_TOMATE);
             await deleteData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_MED);
         } catch (e) {
@@ -67,30 +72,76 @@ const SalesSystemTester = () => {
             await initDB();
             await cleanEnvironment();
 
-            addLog("🚀 INICIANDO TEST DEL CORE DE VENTAS...", 'info');
+            addLog("🚀 INICIANDO TEST COMPLETO DEL SISTEMA DE VENTAS...", 'info');
 
-            // ----------------------------------------------------------------
-            // 1. PREPARACIÓN DE DATOS (Recetas y Lotes)
-            // ----------------------------------------------------------------
-            addLog("--- 1. CONFIGURACIÓN DE ECOSISTEMA ---", 'info');
+            // ═══════════════════════════════════════════════════════════
+            // 1. CONFIGURACIÓN DE ECOSISTEMA
+            // ═══════════════════════════════════════════════════════════
+            addLog("--- 1. CONFIGURACIÓN DE DATOS MAESTROS ---", 'info');
 
-            // Crear Ingredientes
-            await saveData(STORES.MENU, { id: TEST_IDS.ING_HARINA, name: "Harina Test", trackStock: true, price: 0 });
-            await saveData(STORES.MENU, { id: TEST_IDS.ING_TOMATE, name: "Tomate Test", trackStock: true, price: 0 });
+            // Ingredientes
+            await saveData(STORES.MENU, {
+                id: TEST_IDS.ING_HARINA,
+                name: "Harina Test",
+                trackStock: true,
+                price: 0,
+                cost: 10,
+                stock: 0,
+                batchManagement: { enabled: true }
+            });
+            await saveData(STORES.MENU, {
+                id: TEST_IDS.ING_TOMATE,
+                name: "Tomate Test",
+                trackStock: true,
+                price: 0,
+                cost: 5,
+                stock: 0,
+                batchManagement: { enabled: true }
+            });
+            await saveData(STORES.MENU, {
+                id: TEST_IDS.ING_QUESO,
+                name: "Queso Test (SERÁ ELIMINADO)",
+                trackStock: true,
+                price: 0,
+                cost: 8,
+                stock: 0,
+                batchManagement: { enabled: true }
+            });
 
-            // Crear Lotes (Stock Inicial: Harina=100, Tomate=50)
+            // ✅ NUEVO: Lotes para probar FIFO (Harina con 2 lotes de diferentes precios)
             await saveBatchAndSyncProduct({
-                id: TEST_IDS.BATCH_HARINA, productId: TEST_IDS.ING_HARINA, stock: 100, cost: 10, isActive: true
+                id: TEST_IDS.BATCH_HARINA_OLD,
+                productId: TEST_IDS.ING_HARINA,
+                stock: 50,
+                cost: 10,
+                price: 20,
+                createdAt: '2025-01-01T00:00:00Z', // Lote viejo
+                isActive: true
             });
             await saveBatchAndSyncProduct({
-                id: TEST_IDS.BATCH_TOMATE, productId: TEST_IDS.ING_TOMATE, stock: 50, cost: 5, isActive: true
+                id: TEST_IDS.BATCH_HARINA_NEW,
+                productId: TEST_IDS.ING_HARINA,
+                stock: 50,
+                cost: 15, // Más caro
+                price: 25,
+                createdAt: '2025-02-01T00:00:00Z', // Lote nuevo
+                isActive: true
             });
 
-            // Crear Producto Compuesto (Pizza = 2 Harina + 1 Tomate)
+            await saveBatchAndSyncProduct({
+                id: TEST_IDS.BATCH_TOMATE,
+                productId: TEST_IDS.ING_TOMATE,
+                stock: 50,
+                cost: 5,
+                isActive: true
+            });
+
+            // Producto Compuesto (Pizza)
             const pizzaProd = {
                 id: TEST_IDS.PROD_PIZZA,
                 name: "Pizza Especial Test",
                 price: 100,
+                cost: 0, // Se calcula dinámicamente
                 trackStock: false,
                 recipe: [
                     { ingredientId: TEST_IDS.ING_HARINA, quantity: 2 },
@@ -99,42 +150,61 @@ const SalesSystemTester = () => {
             };
             await saveData(STORES.MENU, pizzaProd);
 
-            // Crear Producto Controlado (Farmacia)
+            // Producto Controlado (Farmacia)
             const medProd = {
                 id: TEST_IDS.PROD_MEDICINA,
                 name: "Antibiótico Controlado",
                 price: 200,
+                cost: 50,
                 trackStock: true,
-                requiresPrescription: true // <--- Flag clave
+                requiresPrescription: true,
+                stock: 0,
+                batchManagement: { enabled: true }
             };
             await saveData(STORES.MENU, medProd);
             await saveBatchAndSyncProduct({
-                id: TEST_IDS.BATCH_MED, productId: TEST_IDS.PROD_MEDICINA, stock: 10, cost: 50, isActive: true
+                id: TEST_IDS.BATCH_MED,
+                productId: TEST_IDS.PROD_MEDICINA,
+                stock: 10,
+                cost: 50,
+                isActive: true
+            });
+
+            // ✅ NUEVO: Producto Genérico (Sin lotes, stock directo)
+            await saveData(STORES.MENU, {
+                id: TEST_IDS.PROD_GENERICO,
+                name: "Producto Genérico",
+                price: 50,
+                cost: 20,
+                trackStock: true,
+                stock: 100, // Stock directo
+                batchManagement: { enabled: false }
             });
 
             addLog("📦 Datos maestros creados correctamente.", 'success');
-            setProgress(30);
+            setProgress(20);
 
-            // ----------------------------------------------------------------
-            // 2. TEST DE VALIDACIÓN (Reglas de Negocio)
-            // ----------------------------------------------------------------
+            // ═══════════════════════════════════════════════════════════
+            // 2. TEST DE VALIDACIONES DE NEGOCIO
+            // ═══════════════════════════════════════════════════════════
             addLog("--- 2. TEST VALIDACIONES DE NEGOCIO ---", 'info');
 
-            // Cargamos todos los productos para simular el store
             const allProducts = [
                 await loadData(STORES.MENU, TEST_IDS.ING_HARINA),
                 await loadData(STORES.MENU, TEST_IDS.ING_TOMATE),
+                await loadData(STORES.MENU, TEST_IDS.ING_QUESO),
                 await loadData(STORES.MENU, TEST_IDS.PROD_PIZZA),
-                await loadData(STORES.MENU, TEST_IDS.PROD_MEDICINA)
+                await loadData(STORES.MENU, TEST_IDS.PROD_MEDICINA),
+                await loadData(STORES.MENU, TEST_IDS.PROD_GENERICO)
             ];
 
-            // 2.1 Intentar vender antibiótico SIN receta (Debe fallar)
+            // 2.1 Bloqueo de antibiótico sin receta
             const resultBlocked = await processSale({
                 order: [{ id: TEST_IDS.PROD_MEDICINA, quantity: 1, price: 200 }],
                 paymentData: { amountPaid: 200, paymentMethod: 'cash' },
                 total: 200,
                 allProducts,
-                features: { hasLabFields: true }, // Simulamos modo farmacia
+                features: { hasLabFields: true },
                 companyName: "Test Lab"
             });
 
@@ -142,8 +212,7 @@ const SalesSystemTester = () => {
                 "Bloqueo de antibiótico s/receta funcionó correctamente",
                 "ERROR GRAVE: Se permitió vender controlado sin receta");
 
-            // 2.2 Intentar vender MÁS de lo que hay en stock (Pizza)
-            // Necesitamos: 60 Pizzas * 1 Tomate = 60 Tomates (Solo hay 50)
+            // 2.2 Stock Insuficiente (Pizza: 60 * 1 Tomate = 60 Tomates, solo hay 50)
             const resultStock = await processSale({
                 order: [{ id: TEST_IDS.PROD_PIZZA, quantity: 60, price: 100 }],
                 paymentData: { amountPaid: 6000, paymentMethod: 'cash' },
@@ -154,22 +223,47 @@ const SalesSystemTester = () => {
 
             assert(resultStock.success === false && resultStock.errorType === 'STOCK_WARNING',
                 "Validación de Stock Insuficiente correcta",
-                "ERROR: El sistema permitió vender sin stock de ingredientes");
+                "ERROR: El sistema permitió vender sin stock");
 
-            setProgress(60);
+            setProgress(40);
 
-            // ----------------------------------------------------------------
-            // 3. TEST DE VENTA EXITOSA Y DEDUCCIÓN
-            // ----------------------------------------------------------------
-            addLog("--- 3. TEST FLUJO EXITOSO Y DEDUCCIÓN ---", 'info');
+            // ═══════════════════════════════════════════════════════════
+            // 3. ✅ NUEVO: TEST DE SEGURIDAD DE PRECIOS
+            // ═══════════════════════════════════════════════════════════
+            addLog("--- 3. TEST SEGURIDAD DE PRECIOS (Anti-Manipulación) ---", 'info');
 
-            // Vender 10 Pizzas
-            // Consumo esperado: 
-            // - Harina: 10 * 2 = 20 unidades (Stock final debe ser 100 - 20 = 80)
-            // - Tomate: 10 * 1 = 10 unidades (Stock final debe ser 50 - 10 = 40)
+            const resultPriceTampering = await processSale({
+                order: [{
+                    id: TEST_IDS.PROD_GENERICO,
+                    quantity: 1,
+                    price: 1 // ⚠️ Precio manipulado (real es 50)
+                }],
+                paymentData: { amountPaid: 1, paymentMethod: 'cash' },
+                total: 1, // Total también manipulado
+                allProducts,
+                features: {}
+            });
 
-            const successfulSale = await processSale({
-                order: [{ id: TEST_IDS.PROD_PIZZA, parentId: TEST_IDS.PROD_PIZZA, quantity: 10, price: 100 }],
+            assert(resultPriceTampering.success === false,
+                "Sistema bloqueó venta con precio manipulado",
+                "ERROR CRÍTICO DE SEGURIDAD: Se permitió venta con precio falso");
+
+            setProgress(55);
+
+            // ═══════════════════════════════════════════════════════════
+            // 4. ✅ NUEVO: TEST FIFO (Lotes en orden correcto)
+            // ═══════════════════════════════════════════════════════════
+            addLog("--- 4. TEST DEDUCCIÓN FIFO DE LOTES ---", 'info');
+
+            // Vender 10 Pizzas (20 Harina, 10 Tomate)
+            // Debería usar PRIMERO el lote viejo de harina (BATCH_HARINA_OLD)
+            const fifoSale = await processSale({
+                order: [{
+                    id: TEST_IDS.PROD_PIZZA,
+                    parentId: TEST_IDS.PROD_PIZZA,
+                    quantity: 10,
+                    price: 100
+                }],
                 paymentData: {
                     customerId: 'GENERIC',
                     paymentMethod: 'cash',
@@ -178,31 +272,91 @@ const SalesSystemTester = () => {
                 },
                 total: 1000,
                 allProducts,
-                features: { hasRecipes: true, hasKDS: false },
-                companyName: "Test Pitufo"
+                features: { hasRecipes: true },
+                companyName: "Test"
             });
 
-            assert(successfulSale.success === true,
-                "Venta procesada exitosamente",
-                `Fallo al procesar venta válida: ${successfulSale.message}`);
+            assert(fifoSale.success === true,
+                "Venta FIFO procesada exitosamente",
+                `Fallo en venta FIFO: ${fifoSale.message}`);
 
-            // Verificar saldos en DB
+            // Verificar que el lote VIEJO se descontó primero
+            const batchOldAfter = await loadData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_HARINA_OLD);
+            const batchNewAfter = await loadData(STORES.PRODUCT_BATCHES, TEST_IDS.BATCH_HARINA_NEW);
+
+            assert(batchOldAfter.stock === 30,
+                `Lote viejo descontado correctamente FIFO (50 -> 30)`,
+                `Error FIFO en lote viejo. Esperado: 30, Actual: ${batchOldAfter.stock}`);
+
+            assert(batchNewAfter.stock === 50,
+                `Lote nuevo intacto (no se tocó porque aún hay stock del viejo)`,
+                `Error: Se usó el lote nuevo antes que el viejo (stock: ${batchNewAfter.stock})`);
+
+            setProgress(70);
+
+            // ═══════════════════════════════════════════════════════════
+            // 5. ✅ NUEVO: TEST INGREDIENTE ELIMINADO (FANTASMA)
+            // ═══════════════════════════════════════════════════════════
+            addLog("--- 5. TEST INGREDIENTE ELIMINADO (FANTASMA) ---", 'info');
+
+            // Agregamos Queso a la receta de Pizza
+            const pizzaConQueso = await loadData(STORES.MENU, TEST_IDS.PROD_PIZZA);
+            pizzaConQueso.recipe.push({ ingredientId: TEST_IDS.ING_QUESO, quantity: 1 });
+            await saveData(STORES.MENU, pizzaConQueso);
+
+            // ELIMINAMOS el ingrediente Queso (Simulamos que alguien lo borró)
+            await deleteData(STORES.MENU, TEST_IDS.ING_QUESO);
+
+            // Actualizamos allProducts SIN el queso
+            const productsAfterDeletion = [
+                await loadData(STORES.MENU, TEST_IDS.ING_HARINA),
+                await loadData(STORES.MENU, TEST_IDS.ING_TOMATE),
+                await loadData(STORES.MENU, TEST_IDS.PROD_PIZZA),
+                await loadData(STORES.MENU, TEST_IDS.PROD_MEDICINA),
+                await loadData(STORES.MENU, TEST_IDS.PROD_GENERICO)
+            ];
+
+            const resultPhantom = await processSale({
+                order: [{ id: TEST_IDS.PROD_PIZZA, quantity: 1, price: 100 }],
+                paymentData: { amountPaid: 100, paymentMethod: 'cash' },
+                total: 100,
+                allProducts: productsAfterDeletion,
+                features: { hasRecipes: true }
+            });
+
+            assert(resultPhantom.success === false && resultPhantom.errorType === 'STOCK_WARNING',
+                "Sistema detectó ingrediente eliminado (fantasma)",
+                "ERROR CRÍTICO: Se permitió venta con ingrediente inexistente");
+
+            assert(
+                resultPhantom.missingData?.some(m => m.ingredientName?.includes('ERROR CRÍTICO')),
+                "Mensaje de error identifica ingrediente fantasma",
+                "Fallo: No se identificó el ingrediente eliminado"
+            );
+
+            setProgress(85);
+
+            // ═══════════════════════════════════════════════════════════
+            // 6. ✅ NUEVO: VALIDACIÓN DE SINCRONIZACIÓN DE STOCK PADRE
+            // ═══════════════════════════════════════════════════════════
+            addLog("--- 6. TEST SINCRONIZACIÓN DE STOCK PADRE ---", 'info');
+
             const harinaFinal = await loadData(STORES.MENU, TEST_IDS.ING_HARINA);
-            const tomateFinal = await loadData(STORES.MENU, TEST_IDS.ING_TOMATE);
+            const expectedHarinaStock = 30 + 50; // Lote viejo (30) + Lote nuevo (50)
 
-            assert(harinaFinal.stock === 80,
-                `Stock Harina descontado correctamente (100 -> 80)`,
-                `Error en descuento Harina. Esperado: 80, Actual: ${harinaFinal.stock}`);
+            assert(harinaFinal.stock === expectedHarinaStock,
+                `Stock padre sincronizado correctamente (${expectedHarinaStock})`,
+                `Error en sincronización. Esperado: ${expectedHarinaStock}, Actual: ${harinaFinal.stock}`);
 
-            assert(tomateFinal.stock === 40,
-                `Stock Tomate descontado correctamente (50 -> 40)`,
-                `Error en descuento Tomate. Esperado: 40, Actual: ${tomateFinal.stock}`);
+            setProgress(95);
+
+            // ═══════════════════════════════════════════════════════════
+            // 7. LIMPIEZA FINAL
+            // ═══════════════════════════════════════════════════════════
+            await cleanEnvironment();
 
             setProgress(100);
-            addLog("🎉 TODO EL SISTEMA DE VENTAS OPERA AL 100%", 'success');
-
-            // Limpieza final opcional (puedes comentarla para inspeccionar la DB manualmente)
-            await cleanEnvironment();
+            addLog("🎉 TODOS LOS TESTS PASARON EXITOSAMENTE", 'success');
 
         } catch (error) {
             console.error(error);
@@ -215,9 +369,9 @@ const SalesSystemTester = () => {
     return (
         <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'monospace' }}>
             <div style={{ marginBottom: '20px', borderBottom: '2px solid #3b82f6', paddingBottom: '15px' }}>
-                <h2 style={{ margin: 0, color: '#1e40af' }}>🧪 Sales Service Integration Test</h2>
+                <h2 style={{ margin: 0, color: '#1e40af' }}>🧪 Sales Service Integracion Test</h2>
                 <p style={{ color: '#64748b', marginTop: '5px' }}>
-                    Verifica: `salesService.js` ↔ `processSaleCore.js` ↔ `stockValidation.js`
+                    Verifica: Seguridad de Precios | FIFO | Ingredientes Eliminados | Sincronización de Stock
                 </p>
             </div>
 
@@ -237,7 +391,7 @@ const SalesSystemTester = () => {
                     boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                 }}
             >
-                {isRunning ? '⚡ Ejecutando Pruebas...' : '▶ EJECUTAR TEST DE VENTAS'}
+                {isRunning ? '⚡ Ejecutando Pruebas...' : '▶ EJECUTAR TEST COMPLETO'}
             </button>
 
             <div style={{
