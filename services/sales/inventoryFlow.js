@@ -46,7 +46,7 @@ export const loadRelevantBatches = async ({
                 }
                 if (batches && batches.length > 0) {
                     batches.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-                    batchesMap.set(productId, batches);
+                    batchesMap.set(productId, structuredClone(batches));
                 }
             })
         );
@@ -72,17 +72,21 @@ export const buildProcessedItemsAndDeductions = ({
         let quantityToDeduct = orderItem.quantity;
         if (product && product.conversionFactor?.enabled) {
             const factor = parseFloat(product.conversionFactor.factor);
-            if (!isNaN(factor) && factor > 0) {
+            if (!isNaN(factor) && factor > 1) {
                 quantityToDeduct = orderItem.quantity / factor;
+            } else if (factor > 0 && factor <= 1) {
+                quantityToDeduct = orderItem.quantity;
             }
         }
 
         if (!product || (product.trackStock === false && !hasRecipe)) {
+            const authoritativeCost = product ? (parseFloat(product.cost) || 0) : 0;
+
             processedItems.push({
                 ...orderItem,
                 image: null,
                 base64: null,
-                cost: orderItem.cost || 0,
+                cost: authoritativeCost, // <--- ✅ BLINDADO: Usa datos del servidor
                 batchesUsed: [],
                 stockDeducted: 0
             });

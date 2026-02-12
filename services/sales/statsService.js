@@ -7,20 +7,9 @@ import { roundCurrency } from '../utils';
 
 export const updateDailyStats = async (sale) => {
     const dateKey = new Date(sale.timestamp).toISOString().split('T')[0];
+    const db = getDbInstance(); // Asumo que tienes acceso a la instancia de Dexie
 
-    let dailyStat = await loadData(STORES.DAILY_STATS, dateKey);
-
-    if (!dailyStat) {
-        dailyStat = {
-            id: dateKey,
-            date: dateKey,
-            revenue: 0,
-            profit: 0,
-            orders: 0,
-            itemsSold: 0
-        };
-    }
-
+    // Calculamos los deltas
     let saleProfit = 0;
     sale.items.forEach(item => {
         const cost = item.cost || 0;
@@ -28,12 +17,32 @@ export const updateDailyStats = async (sale) => {
         saleProfit += roundCurrency(profitUnitario * item.quantity);
     });
 
-    dailyStat.revenue += sale.total;
-    dailyStat.profit += saleProfit;
-    dailyStat.orders += 1;
-    dailyStat.itemsSold += sale.items.reduce((acc, i) => acc + i.quantity, 0);
+    const itemsCount = sale.items.reduce((acc, i) => acc + i.quantity, 0);
 
-    await saveData(STORES.DAILY_STATS, dailyStat);
+    // OPERACIÓN ATÓMICA: Si existe modifica, si no añade.
+    await db.transaction('rw', STORES.DAILY_STATS, async () => {
+        const existing = await db.table(STORES.DAILY_STATS).get(dateKey);
+
+        if (existing) {
+            // Modificación atómica dentro de transacción RW
+            await db.table(STORES.DAILY_STATS).where('id').equals(dateKey).modify(stat => {
+                stat.revenue = roundCurrency(stat.revenue + sale.total);
+                stat.profit = roundCurrency(stat.profit + saleProfit);
+                stat.orders += 1;
+                stat.itemsSold += itemsCount;
+            });
+        } else {
+            // Creación inicial
+            await db.table(STORES.DAILY_STATS).add({
+                id: dateKey,
+                date: dateKey,
+                revenue: sale.total,
+                profit: saleProfit,
+                orders: 1,
+                itemsSold: itemsCount
+            });
+        }
+    });
 };
 
 export const getFastDashboardStats = async () => {

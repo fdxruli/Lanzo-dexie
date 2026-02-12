@@ -36,6 +36,22 @@ export const processSaleCore = async ({
 
         const productMap = new Map(allProducts.map(p => [p.id, p]));
 
+        if (features.hasLabFields) {
+            const restrictedItem = itemsToProcess.find(item => {
+                const realProduct = productMap.get(item.parentId || item.id);
+                return realProduct && realProduct.requiresPrescription === true;
+            });
+
+            if (restrictedItem) {
+                const hasValidPrescription = tempPrescriptionData &&
+                    tempPrescriptionData.doctorName &&
+                    tempPrescriptionData.licenseNumber;
+                if (!hasValidPrescription) {
+                    throw new Error(`BLOQUEO DE SEGURIDAD: El producto "${restrictedItem.name}" es controlado y requiere dats de receta medica (Doctor y Cedula).`)
+                }
+            }
+        }
+
         const stockValidation = await validateStockBeforeSale({
             itemsToProcess,
             productMap,
@@ -49,6 +65,10 @@ export const processSaleCore = async ({
             return stockValidation.response;
         }
 
+        if (isNaN(parseFloat(total)) || parseFloat(total) < 0) {
+            throw new Error('El total de la venta no es válido.');
+        }
+
         await normalizeAndValidatePricing({
             itemsToProcess,
             total,
@@ -58,10 +78,6 @@ export const processSaleCore = async ({
             calculateCompositePrice,
             Logger
         });
-
-        if (isNaN(parseFloat(total)) || parseFloat(total) < 0) {
-            throw new Error('El total de la venta no es válido.');
-        }
 
         const batchesMap = await loadRelevantBatches({
             itemsToProcess,
@@ -88,7 +104,8 @@ export const processSaleCore = async ({
             abono: paymentData.amountPaid,
             saldoPendiente: paymentData.saldoPendiente,
             fulfillmentStatus: features.hasKDS ? 'pending' : 'completed',
-            prescriptionDetails: tempPrescriptionData || null
+            prescriptionDetails: tempPrescriptionData || null,
+            postEffectsCompleted: false
         };
 
         const transactionResult = await executeSaleTransactionSafe(sale, batchesToDeduct);
