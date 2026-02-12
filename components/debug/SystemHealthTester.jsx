@@ -18,11 +18,11 @@ const SalesSystemTester = () => {
         CUSTOMER: 'TEST_SYS_CUSTOMER',
         ING_HARINA: 'TEST_SYS_ING_HARINA',
         ING_TOMATE: 'TEST_SYS_ING_TOMATE',
-        ING_QUESO: 'TEST_SYS_ING_QUESO', // ✅ NUEVO: Para probar ingredientes eliminados
+        ING_QUESO: 'TEST_SYS_ING_QUESO',
         PROD_PIZZA: 'TEST_SYS_PROD_PIZZA',
         PROD_MEDICINA: 'TEST_SYS_PROD_MEDICINA',
-        PROD_GENERICO: 'TEST_SYS_PROD_GENERICO', // ✅ NUEVO: Producto sin lotes
-        BATCH_HARINA_OLD: 'TEST_SYS_BATCH_HARINA_OLD', // ✅ NUEVO: Para probar FIFO
+        PROD_GENERICO: 'TEST_SYS_PROD_GENERICO',
+        BATCH_HARINA_OLD: 'TEST_SYS_BATCH_HARINA_OLD',
         BATCH_HARINA_NEW: 'TEST_SYS_BATCH_HARINA_NEW',
         BATCH_TOMATE: 'TEST_SYS_BATCH_TOMATE',
         BATCH_MED: 'TEST_SYS_BATCH_MED'
@@ -108,23 +108,23 @@ const SalesSystemTester = () => {
                 batchManagement: { enabled: true }
             });
 
-            // ✅ NUEVO: Lotes para probar FIFO (Harina con 2 lotes de diferentes precios)
+            // Lotes para probar FIFO (Harina con 2 lotes de diferentes precios)
             await saveBatchAndSyncProduct({
                 id: TEST_IDS.BATCH_HARINA_OLD,
                 productId: TEST_IDS.ING_HARINA,
                 stock: 50,
                 cost: 10,
                 price: 20,
-                createdAt: '2025-01-01T00:00:00Z', // Lote viejo
+                createdAt: '2025-01-01T00:00:00Z',
                 isActive: true
             });
             await saveBatchAndSyncProduct({
                 id: TEST_IDS.BATCH_HARINA_NEW,
                 productId: TEST_IDS.ING_HARINA,
                 stock: 50,
-                cost: 15, // Más caro
+                cost: 15,
                 price: 25,
-                createdAt: '2025-02-01T00:00:00Z', // Lote nuevo
+                createdAt: '2025-02-01T00:00:00Z',
                 isActive: true
             });
 
@@ -141,7 +141,7 @@ const SalesSystemTester = () => {
                 id: TEST_IDS.PROD_PIZZA,
                 name: "Pizza Especial Test",
                 price: 100,
-                cost: 0, // Se calcula dinámicamente
+                cost: 0,
                 trackStock: false,
                 recipe: [
                     { ingredientId: TEST_IDS.ING_HARINA, quantity: 2 },
@@ -170,14 +170,14 @@ const SalesSystemTester = () => {
                 isActive: true
             });
 
-            // ✅ NUEVO: Producto Genérico (Sin lotes, stock directo)
+            // Producto Genérico (Sin lotes, stock directo)
             await saveData(STORES.MENU, {
                 id: TEST_IDS.PROD_GENERICO,
                 name: "Producto Genérico",
                 price: 50,
                 cost: 20,
                 trackStock: true,
-                stock: 100, // Stock directo
+                stock: 100,
                 batchManagement: { enabled: false }
             });
 
@@ -228,7 +228,7 @@ const SalesSystemTester = () => {
             setProgress(40);
 
             // ═══════════════════════════════════════════════════════════
-            // 3. ✅ NUEVO: TEST DE SEGURIDAD DE PRECIOS
+            // 3. TEST DE SEGURIDAD DE PRECIOS
             // ═══════════════════════════════════════════════════════════
             addLog("--- 3. TEST SEGURIDAD DE PRECIOS (Anti-Manipulación) ---", 'info');
 
@@ -239,7 +239,7 @@ const SalesSystemTester = () => {
                     price: 1 // ⚠️ Precio manipulado (real es 50)
                 }],
                 paymentData: { amountPaid: 1, paymentMethod: 'cash' },
-                total: 1, // Total también manipulado
+                total: 1,
                 allProducts,
                 features: {}
             });
@@ -251,18 +251,18 @@ const SalesSystemTester = () => {
             setProgress(55);
 
             // ═══════════════════════════════════════════════════════════
-            // 4. ✅ NUEVO: TEST FIFO (Lotes en orden correcto)
+            // 4. ✅ CORREGIDO: TEST FIFO (Lotes en orden correcto)
             // ═══════════════════════════════════════════════════════════
             addLog("--- 4. TEST DEDUCCIÓN FIFO DE LOTES ---", 'info');
 
-            // Vender 10 Pizzas (20 Harina, 10 Tomate)
-            // Debería usar PRIMERO el lote viejo de harina (BATCH_HARINA_OLD)
+            // 🔧 CORRECCIÓN: Eliminado parentId y agregado selectedModifiers
             const fifoSale = await processSale({
                 order: [{
                     id: TEST_IDS.PROD_PIZZA,
-                    parentId: TEST_IDS.PROD_PIZZA,
+                    // parentId: TEST_IDS.PROD_PIZZA,  ← ELIMINADO
                     quantity: 10,
-                    price: 100
+                    price: 100,
+                    selectedModifiers: []  // ← AGREGADO
                 }],
                 paymentData: {
                     customerId: 'GENERIC',
@@ -295,19 +295,16 @@ const SalesSystemTester = () => {
             setProgress(70);
 
             // ═══════════════════════════════════════════════════════════
-            // 5. ✅ NUEVO: TEST INGREDIENTE ELIMINADO (FANTASMA)
+            // 5. TEST INGREDIENTE ELIMINADO (FANTASMA)
             // ═══════════════════════════════════════════════════════════
             addLog("--- 5. TEST INGREDIENTE ELIMINADO (FANTASMA) ---", 'info');
 
-            // Agregamos Queso a la receta de Pizza
             const pizzaConQueso = await loadData(STORES.MENU, TEST_IDS.PROD_PIZZA);
             pizzaConQueso.recipe.push({ ingredientId: TEST_IDS.ING_QUESO, quantity: 1 });
             await saveData(STORES.MENU, pizzaConQueso);
 
-            // ELIMINAMOS el ingrediente Queso (Simulamos que alguien lo borró)
             await deleteData(STORES.MENU, TEST_IDS.ING_QUESO);
 
-            // Actualizamos allProducts SIN el queso
             const productsAfterDeletion = [
                 await loadData(STORES.MENU, TEST_IDS.ING_HARINA),
                 await loadData(STORES.MENU, TEST_IDS.ING_TOMATE),
@@ -337,12 +334,12 @@ const SalesSystemTester = () => {
             setProgress(85);
 
             // ═══════════════════════════════════════════════════════════
-            // 6. ✅ NUEVO: VALIDACIÓN DE SINCRONIZACIÓN DE STOCK PADRE
+            // 6. VALIDACIÓN DE SINCRONIZACIÓN DE STOCK PADRE
             // ═══════════════════════════════════════════════════════════
             addLog("--- 6. TEST SINCRONIZACIÓN DE STOCK PADRE ---", 'info');
 
             const harinaFinal = await loadData(STORES.MENU, TEST_IDS.ING_HARINA);
-            const expectedHarinaStock = 30 + 50; // Lote viejo (30) + Lote nuevo (50)
+            const expectedHarinaStock = 30 + 50;
 
             assert(harinaFinal.stock === expectedHarinaStock,
                 `Stock padre sincronizado correctamente (${expectedHarinaStock})`,
@@ -369,7 +366,7 @@ const SalesSystemTester = () => {
     return (
         <div style={{ padding: '20px', maxWidth: '800px', margin: '0 auto', fontFamily: 'monospace' }}>
             <div style={{ marginBottom: '20px', borderBottom: '2px solid #3b82f6', paddingBottom: '15px' }}>
-                <h2 style={{ margin: 0, color: '#1e40af' }}>🧪 Sales Service Integracion Test</h2>
+                <h2 style={{ margin: 0, color: '#1e40af' }}>🧪 Sales Service Integration Test (CORREGIDO)</h2>
                 <p style={{ color: '#64748b', marginTop: '5px' }}>
                     Verifica: Seguridad de Precios | FIFO | Ingredientes Eliminados | Sincronización de Stock
                 </p>
