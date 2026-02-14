@@ -64,7 +64,7 @@ export default function PosPage() {
   // Esperamos 300ms después de que el usuario deje de escribir para buscar en la BD
   const debouncedSearchTerm = useDebounce(searchTerm, 300);
 
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [isSaleInProgress, setIsSaleInProgress] = useState(false);
   const [isMobileOrderOpen, setIsMobileOrderOpen] = useState(false);
 
   const scanProductFast = useProductStore((state) => state.scanProductFast);
@@ -191,8 +191,6 @@ export default function PosPage() {
   const { order, customer, clearOrder, getTotalPrice } = useOrderStore();
   const companyName = useAppStore((state) => state.companyProfile?.name || 'Tu Negocio');
 
-  // --- CAMBIO: Usamos useProductStore para obtener el menú y la función de recarga ---
-  // Nota: 'loadInitialProducts' es el equivalente a la carga inicial/refresco en el nuevo store
   const allProducts = useProductStore((state) => state.menu);
   const refreshData = useProductStore((state) => state.loadInitialProducts);
 
@@ -270,9 +268,13 @@ export default function PosPage() {
   };
 
   const handleProcessOrder = async (paymentData, forceSale = false) => {
-    if (isProcessing) return;
+    // 1. PRIMER NIVEL DE DEFENSA: Check de bandera
+    if (isSaleInProgress) {
+      console.warn("🚫 Intento de venta duplicada bloqueado por idempotencia UI.");
+      return;
+    }
 
-    // 1. Verificar sesión
+    // 2. Validación de Sesión
     const isSessionValid = await verifySessionIntegrity();
     if (!isSessionValid) {
       showMessageModal('Sesion invalida o licencia expirada. El sistema se recargará.', () => {
@@ -281,20 +283,22 @@ export default function PosPage() {
       return;
     }
 
-    setIsProcessing(true);
+    // 3. BLOQUEO ACTIVO
+    setIsSaleInProgress(true);
 
-    // 2. Validación rápida de caja (Solo si es efectivo)
+    // Validación rápida de caja 
     if (paymentData.paymentMethod === 'efectivo' && (!cajaActual || cajaActual.estado !== 'abierta')) {
       setIsPaymentModalOpen(false);
       setIsQuickCajaOpen(true);
-      setIsProcessing(false);
+      setIsSaleInProgress(false); // Liberamos aquí porque se detiene el flujo
       return;
     }
 
     try {
+      // Cerramos modal para mejor UX, pero el bloqueo isSaleInProgress protege de clics externos
       setIsPaymentModalOpen(false);
 
-      // 3. Llamada al servicio con la bandera 'ignoreStock'
+      // Llamada al servicio (que ya incluye el Retry automático si hay race condition)
       const result = await processSale({
         order,
         paymentData,
@@ -303,7 +307,7 @@ export default function PosPage() {
         features,
         companyName,
         tempPrescriptionData,
-        ignoreStock: forceSale // Pasamos true si el usuario ya confirmó
+        ignoreStock: forceSale
       });
 
       if (result.success) {
@@ -311,45 +315,48 @@ export default function PosPage() {
         clearOrder();
         setTempPrescriptionData(null);
         setIsMobileOrderOpen(false);
+        // Feedback positivo
         showMessageModal('✅ ¡Venta registrada correctamente!');
 
-        // Recargar inventario visualmente
         await refreshData();
       } else {
-        // --- MANEJO DE RESPUESTAS NO EXITOSAS ---
-
+        // --- MANEJO DE ERRORES ---
         if (result.errorType === 'RACE_CONDITION') {
-          // Caso: Stock cambió mientras cobraban (concurrencia)
-          showMessageModal(`⚠️ ${result.message} Se han actualizado los datos. Intenta cobrar de nuevo.`);
+          // Si llega aquí es porque fallaron TODOS los retries automáticos
+          showMessageModal(`⚠️ El sistema está muy ocupado. Por favor intenta cobrar de nuevo.`);
           await refreshData();
         }
         else if (result.errorType === 'STOCK_WARNING') {
-          // ⚠️ CASO ADVERTENCIA: Faltan insumos, pero permitimos decidir
+          // Usuario debe decidir si fuerza la venta
           showMessageModal(
             result.message,
             () => {
-              // Callback de Confirmación: El usuario elige "Sí, Vender Igual"
-              // Volvemos a ejecutar la función pero forzando la venta
+              // IMPORTANTE: Liberamos el bloqueo antes de volver a llamar recursivamente
+              setIsSaleInProgress(false);
+              // Reintentamos forzando stock
               handleProcessOrder(paymentData, true);
             },
             {
-              confirmButtonText: 'Sí, Vender Igual', // Texto del botón de confirmar
-              type: 'warning' // Estilo visual (amarillo/naranja)
+              confirmButtonText: 'Sí, Vender Igual',
+              type: 'warning'
             }
           );
+          // Nota: Si el usuario cancela el modal, necesitamos liberar el lock.
+          // showMessageModal en tu sistema actual parece no tener callback de "cancelar" explícito
+          // en su firma simple, pero el finally del try/catch liberará el lock actual.
+          // La recursión creará su propio ciclo de bloqueo.
         }
         else {
-          // Otros errores (bloqueantes)
           showMessageModal(`Error: ${result.message}`, null, { type: 'error' });
         }
       }
 
     } catch (error) {
-      // --- ERROR NO CONTROLADO (CRASH) ---
       Logger.error('Error crítico en UI:', error);
       showMessageModal(`Error inesperado: ${error.message}`);
     } finally {
-      setIsProcessing(false);
+      // 4. DESBLOQUEO FINAL (Siempre se ejecuta)
+      setIsSaleInProgress(false);
     }
   };
 
@@ -379,8 +386,9 @@ export default function PosPage() {
 
   // 2. FUNCIÓN PARA GUARDAR EN BD
   const handleConfirmLayaway = async ({ initialPayment, deadline, customer: customerFromModal }) => {
+    if (isSaleInProgress) return;
     try {
-      setIsProcessing(true);
+      setIsSaleInProgress(true);
 
       // Usamos el cliente que viene del modal. Si no viene, usamos el del store como respaldo (opcional)
       const targetCustomer = customerFromModal || customer;
@@ -414,27 +422,63 @@ export default function PosPage() {
       Logger.error("Layaway Error", error);
       showMessageModal('Error inesperado al crear apartado.');
     } finally {
-      setIsProcessing(false);
+      setIsSaleInProgress(false);
     }
   };
 
-  const handleBarcodeScanned = (code) => {
-    // Si tienes lógica específica de escaneo manual, va aquí.
-    // El ScannerModal ya maneja la adición al carrito internamente en modo POS.
-  };
+  const productosFiltradosParaMenu = useMemo(() => {
+    // Usamos 'allProducts' que es la variable que ya tienes definida arriba
+    const listaOrigen = allProducts || [];
+
+    // CASO 1: Categoría "Agotados" (Nótese el guion bajo _ )
+    if (selectedCategoryId === 'CAT_DYNAMIC_AGOTADOS') {
+      return listaOrigen.filter(p => {
+        // Corregido: batchManagement (singular)
+        const gestionaStock = p.trackStock || p.batchManagement?.enabled;
+        // Solo mostramos si gestiona stock Y el stock es <= 0
+        return gestionaStock && p.stock <= 0;
+      });
+    }
+
+    // CASO 2: Filtrado Normal (Todos o Categoría específica)
+    return listaOrigen.filter(p => {
+      // Corregido: p.categoryId
+      const matchCategory = selectedCategoryId === null || p.categoryId === selectedCategoryId;
+
+      // Corregido: batchManagement (singular)
+      const gestionaStock = p.trackStock || p.batchManagement?.enabled;
+
+      // Calculamos la variable que faltaba
+      const tieneStock = !gestionaStock || p.stock > 0;
+
+      // Retornamos solo si es de la categoría Y tiene stock (para limpiar la vista)
+      return matchCategory && tieneStock;
+    });
+  }, [allProducts, selectedCategoryId]);
+
+  const hasOutOfStockItems = useMemo(() => {
+    if (!allProducts) return false;
+
+    return allProducts.some(product => {
+      // Un producto está "agotado" si gestiona stock Y su stock es <= 0
+      const gestionaStock = product.trackStock || product.batchManagement?.enabled;
+      return gestionaStock && product.stock <= 0;
+    });
+  }, [allProducts]);
 
   return (
     <>
       <div className="pos-page-layout">
         <div className="pos-grid">
           <ProductMenu
-            products={filteredProducts}
+            products={productosFiltradosParaMenu}
             categories={categories}
             selectedCategoryId={selectedCategoryId}
             onSelectCategory={setSelectedCategoryId}
             searchTerm={searchTerm}
             onSearchChange={setSearchTerm}
             onOpenScanner={() => setIsScannerOpen(true)}
+            showOutofStockCategory={hasOutOfStockItems}
           />
           <OrderSummary onOpenPayment={handleInitiateCheckout} />
         </div>

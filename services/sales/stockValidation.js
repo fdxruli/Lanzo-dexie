@@ -1,12 +1,23 @@
-// services/sales/stockValidation.js - VERSIÓN CORREGIDA
-// ✅ Restaura la detección de ingredientes eliminados (fantasma)
+// services/sales/stockValidation.js
+// ✅ Incluye Timeout de Seguridad (DB Protection)
+// ✅ Mantiene detección de ingredientes eliminados
+
+// Helper interno para manejar el Timeout sin romper la inyección de dependencias
+const loadWithTimeout = (loadFn, store, id, timeoutMs = 5000) => {
+    return Promise.race([
+        loadFn(store, id),
+        new Promise((_, reject) =>
+            setTimeout(() => reject(new Error(`DB_TIMEOUT: La lectura del ID ${id} excedió los ${timeoutMs}ms`)), timeoutMs)
+        )
+    ]);
+};
 
 export const validateStockBeforeSale = async ({
     itemsToProcess,
     productMap,
     features,
     ignoreStock,
-    loadData,
+    loadData, // <--- Usaremos esta instancia inyectada
     STORES
 }) => {
     if (!features.hasRecipes || ignoreStock) {
@@ -34,15 +45,34 @@ export const validateStockBeforeSale = async ({
         }
     });
 
-    // 🔥 CARGA DE STOCK FRESCO (Evita race conditions)
+    // 🔥 CARGA DE STOCK FRESCO (CON TIMEOUT Y PARALELISMO)
+    // Protege contra congelamientos si la BD tarda en responder
     const freshStockMap = new Map();
+
     if (uniqueIngredientIds.size > 0) {
-        await Promise.all(Array.from(uniqueIngredientIds).map(async (id) => {
-            const freshProd = await loadData(STORES.MENU, id);
-            if (freshProd) {
-                freshStockMap.set(id, freshProd);
+        try {
+            await Promise.all(Array.from(uniqueIngredientIds).map(async (id) => {
+                // 👇 AQUI APLICAMOS EL TIMEOUT USANDO LA FUNCIÓN INYECTADA
+                const freshProd = await loadWithTimeout(loadData, STORES.MENU, id);
+
+                if (freshProd) {
+                    freshStockMap.set(id, freshProd);
+                }
+            }));
+        } catch (error) {
+            // Si hay timeout, devolvemos error controlado para no colgar el POS
+            if (error.message.includes('DB_TIMEOUT')) {
+                return {
+                    ok: false,
+                    response: {
+                        success: false,
+                        errorType: 'DB_TIMEOUT',
+                        message: '⚠️ El sistema está tardando en verificar el inventario. Inténtalo de nuevo.'
+                    }
+                };
             }
-        }));
+            throw error; // Otros errores siguen su curso normal
+        }
     }
 
     const missingIngredients = [];
@@ -84,31 +114,26 @@ export const validateStockBeforeSale = async ({
             addRequirement(realId, item.quantity);
         }
 
-        // --- 🔴 FASE DE VERIFICACIÓN (CON DETECCIÓN DE FANTASMAS) ---
+        // --- 🔴 FASE DE VERIFICACIÓN ---
         for (const [reqId, reqQty] of itemRequirements.entries()) {
-
-            // ✨ NUEVO: Detectar ingrediente eliminado (CRÍTICO)
             const realIngData = freshStockMap.get(reqId);
 
             if (!realIngData) {
-                // El ingrediente fue eliminado pero sigue en la receta
                 missingIngredients.push({
                     productName: productDef?.name || 'Producto Desconocido',
-                    ingredientName: `⚠️ ERROR CRÍTICO: Ingrediente ID ${reqId} no existe (Fue eliminado)`,
+                    ingredientName: `⚠️ ERROR CRÍTICO: Ingrediente ID ${reqId} eliminado`,
                     needed: reqQty,
                     available: 0,
                     unit: '❌'
                 });
-                continue; // Saltamos este ingrediente y seguimos validando los demás
+                continue;
             }
 
-            // Verificar si existe en el simulador
             if (!simulatedStock.has(reqId)) continue;
 
             const currentAvailable = simulatedStock.get(reqId);
 
             if (currentAvailable < reqQty) {
-                // Evitar duplicados en el reporte
                 const alreadyListed = missingIngredients.some(m => m.ingredientName === realIngData.name);
 
                 if (!alreadyListed) {

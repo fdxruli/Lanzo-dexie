@@ -34,6 +34,14 @@ export const processSaleCore = async ({
         const itemsToProcess = order.filter(item => item.quantity && item.quantity > 0);
         if (itemsToProcess.length === 0) throw new Error('El pedido está vacío.');
 
+        // ✅ 2. AQUI VA LA MEJORA (Validación Temprana de Total)
+        // Movemos esto hacia arriba. Antes estaba después del stockValidation.
+        const totalNum = parseFloat(total);
+        if (isNaN(totalNum) || totalNum < 0) {
+            // Usamos throw para mantener consistencia con tu bloque catch
+            throw new Error('El total de la venta no es válido.');
+        }
+
         const productMap = new Map(allProducts.map(p => [p.id, p]));
 
         if (features.hasLabFields) {

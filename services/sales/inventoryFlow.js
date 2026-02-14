@@ -13,10 +13,17 @@ export const loadRelevantBatches = async ({
         const realProductId = orderItem.parentId || orderItem.id;
         const product = allProducts.find(p => p.id === realProductId);
 
-        const hasRecipe = product?.recipe && product.recipe.length > 0;
-        const isTracked = product?.trackStock;
+        // ✅ MEJORA: Validación de Integridad (Hard Stop)
+        if (!product) {
+            // Lanzamos error para que processSaleCore lo capture y detenga la venta
+            throw new Error(`El producto "${orderItem.name || 'Desconocido'}" ya no existe en el catálogo. Por favor, elimínalo del carrito.`);
+        }
 
-        if (!product || (!isTracked && !hasRecipe)) continue;
+        const hasRecipe = product.recipe && product.recipe.length > 0;
+        const isTracked = product.trackStock;
+
+        // Si existe pero no requiere inventario, lo saltamos (correcto)
+        if (!isTracked && !hasRecipe) continue;
 
         if (hasRecipe) {
             product.recipe.forEach(component => {
@@ -35,6 +42,7 @@ export const loadRelevantBatches = async ({
         }
     }
 
+    // ... resto de la función igual ...
     const batchesMap = new Map();
     if (uniqueProductIds.size > 0) {
         await Promise.all(
@@ -67,10 +75,17 @@ export const buildProcessedItemsAndDeductions = ({
     for (const orderItem of itemsToProcess) {
         const realProductId = orderItem.parentId || orderItem.id;
         const product = allProducts.find(p => p.id === realProductId);
-        const hasRecipe = product?.recipe && product.recipe.length > 0;
+
+        // ✅ MEJORA: Segunda capa de seguridad
+        if (!product) {
+            throw new Error(`Error crítico: El producto "${orderItem.name}" no se encuentra en la base de datos.`);
+        }
+
+        const hasRecipe = product.recipe && product.recipe.length > 0;
 
         let quantityToDeduct = orderItem.quantity;
-        if (product && product.conversionFactor?.enabled) {
+        // Como ya validamos que 'product' existe, podemos acceder a sus propiedades con seguridad
+        if (product.conversionFactor?.enabled) {
             const factor = parseFloat(product.conversionFactor.factor);
             if (!isNaN(factor) && factor > 1) {
                 quantityToDeduct = orderItem.quantity / factor;
@@ -79,20 +94,22 @@ export const buildProcessedItemsAndDeductions = ({
             }
         }
 
-        if (!product || (product.trackStock === false && !hasRecipe)) {
-            const authoritativeCost = product ? (parseFloat(product.cost) || 0) : 0;
+        // Modificamos la condición original eliminando el check de !product porque ya lanzamos error arriba
+        if (product.trackStock === false && !hasRecipe) {
+            const authoritativeCost = (parseFloat(product.cost) || 0);
 
             processedItems.push({
                 ...orderItem,
                 image: null,
                 base64: null,
-                cost: authoritativeCost, // <--- ✅ BLINDADO: Usa datos del servidor
+                cost: authoritativeCost,
                 batchesUsed: [],
                 stockDeducted: 0
             });
             continue;
         }
 
+        // ... resto de la lógica de ingredientes y deducción sigue igual ...
         const ingredientsMap = new Map();
 
         const addIngredientDeduction = (id, qty) => {
