@@ -1,42 +1,44 @@
 import React, { useEffect, useState } from 'react';
 
+// 1. CORRECCIÓN: El componente se declara FUERA para mantener una referencia estable.
+const ShareIcon = () => (
+  <span style={{ display: 'inline-block', verticalAlign: 'middle', margin: '0 4px' }}>
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
+      <polyline points="16 6 12 2 8 6"></polyline>
+      <line x1="12" y1="2" x2="12" y2="15"></line>
+    </svg>
+  </span>
+);
+
+// 2. CORRECCIÓN: Las evaluaciones estáticas se hacen fuera del ciclo de vida si no necesitan reactividad de React.
+const checkIsIOS = () => /iphone|ipad|ipod/.test(window.navigator.userAgent.toLowerCase());
+const checkIsStandalone = () => window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
+
 const InstallPrompt = () => {
-  const [isIOS, setIsIOS] = useState(false);
-  const [isStandalone, setIsStandalone] = useState(false);
+  // Evaluamos una sola vez en cada render. No necesitamos useEffect para esto.
+  const isIOS = checkIsIOS();
+  const isStandalone = checkIsStandalone();
+
   const [deferredPrompt, setDeferredPrompt] = useState(null);
-  const [showPrompt, setShowPrompt] = useState(false);
+  // Inicializamos el estado correctamente desde el principio para evitar parpadeos
+  const [showPrompt, setShowPrompt] = useState(isIOS && !isStandalone);
 
   useEffect(() => {
-    // Detectar si ya está instalado (Standalone)
-    const isInStandaloneMode = window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone;
-    setIsStandalone(isInStandaloneMode);
-
-    // Detectar iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const isIosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(isIosDevice);
-
-    // Manejar evento de instalación para Android/Chrome
     const handleBeforeInstallPrompt = (e) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Solo mostrar si NO está instalado
-      if (!isInStandaloneMode) {
+      if (!isStandalone) {
         setShowPrompt(true);
       }
     };
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
-    // Mostrar prompt de iOS si es iOS y no está instalado
-    if (isIosDevice && !isInStandaloneMode) {
-        setShowPrompt(true);
-    }
-
     return () => {
       window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
     };
-  }, []);
+  }, [isStandalone]);
 
   const handleInstallClick = async () => {
     if (deferredPrompt) {
@@ -84,7 +86,7 @@ const InstallPrompt = () => {
   };
 
   const buttonStyle = {
-    backgroundColor: '#007AFF', // Azul iOS
+    backgroundColor: '#007AFF', 
     color: 'white',
     border: 'none',
     padding: '12px 20px',
@@ -106,23 +108,11 @@ const InstallPrompt = () => {
     cursor: 'pointer'
   };
 
-  // Icono genérico de compartir para la UI
-  const ShareIcon = () => (
-    <span style={{ display: 'inline-block', verticalAlign: 'middle', margin: '0 4px' }}>
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#007AFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-        <polyline points="16 6 12 2 8 6"></polyline>
-        <line x1="12" y1="2" x2="12" y2="15"></line>
-      </svg>
-    </span>
-  );
-
   return (
     <div style={overlayStyle}>
       <button style={closeBtnStyle} onClick={() => setShowPrompt(false)}>×</button>
       
       {isIOS ? (
-        // CONTENIDO PARA IOS
         <div>
           <div style={titleStyle}>Instalar App</div>
           <div style={textStyle}>
@@ -132,13 +122,11 @@ const InstallPrompt = () => {
               <li>Desliza y selecciona <strong>"Agregar al inicio"</strong>.</li>
             </ol>
           </div>
-          {/* Triángulo visual decorativo apuntando abajo (opcional, mejor quitarlo si confunde en desktop) */}
           <div style={{ textAlign: 'center', color: '#ccc', fontSize: '12px' }}>
             (El menú suele estar abajo)
           </div>
         </div>
       ) : (
-        // CONTENIDO PARA ANDROID / CHROME
         <div>
           <div style={titleStyle}>Instalar Aplicación</div>
           <div style={textStyle}>
