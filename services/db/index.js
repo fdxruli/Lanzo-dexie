@@ -87,7 +87,70 @@ export const layawayRepo = {
     getByCustomer: (custId, active) => safeExecute(() => layawayRepository.getByCustomer(custId, active)),
     addPayment: (id, amount) => safeExecute(() => layawayRepository.addPayment(id, amount)),
     getById: (id) => safeExecute(() => layawayRepository.getById(id))
-}
+};
+
+export const executeBatchWithPaymentSafe = async (batchData, paymentInfo) => {
+    return safeExecute(async () => {
+        // Bloqueo estricto de tablas: Nadie más puede leer o escribir en estas tablas
+        // mientras esta función se esté ejecutando.
+        return await db.transaction('rw',
+            [
+                db.table(STORES.PRODUCT_BATCHES),
+                db.table(STORES.MENU),
+                db.table(STORES.MOVIMIENTOS_CAJA),
+                db.table(STORES.CAJAS),
+                db.table(STORES.SALES) // Necesario si vas a recalcular ventas en tiempo real
+            ],
+            async () => {
+                // 1. Obtener la VERDAD ABSOLUTA de la caja en este preciso milisegundo
+                const caja = await db.table(STORES.CAJAS).get(paymentInfo.cajaId);
+                if (!caja || caja.estado !== 'abierta') {
+                    // Si lanzas un error dentro de una transacción en Dexie,
+                    // TODO se revierte automáticamente (Rollback automático).
+                    throw new Error("Transacción abortada: La caja fue cerrada antes de completar la operación.");
+                }
+
+                // 2. CÁLCULO ATÓMICO DEL DINERO DISPONIBLE
+                // Importante: Asegúrate de que esta fórmula refleje exactamente tu lógica de negocio real.
+                const fondoInicial = Number(caja.monto_inicial || caja.fondo_inicial || 0);
+                const ingresosEfectivo = Number(caja.ingresos_efectivo || 0);
+                const salidasEfectivo = Number(caja.salidas_efectivo || 0);
+
+                // Si tus ventas no actualizan "ingresos_efectivo" en tiempo real en el objeto caja,
+                // tendrías que sumar los ingresos leyendo la tabla STORES.MOVIMIENTOS_CAJA y STORES.SALES aquí mismo.
+                const dineroDisponible = fondoInicial + ingresosEfectivo - salidasEfectivo;
+
+                // 3. LA BARRERA INFRANQUEABLE
+                if (dineroDisponible < paymentInfo.monto) {
+                    throw new Error(`Fondos insuficientes. Intento de retirar $${paymentInfo.monto.toFixed(2)} pero la caja solo cuenta con $${dineroDisponible.toFixed(2)}. Transacción abortada.`);
+                }
+
+                // 4. Aplicar el descuento con los datos frescos
+                caja.salidas_efectivo = salidasEfectivo + paymentInfo.monto;
+                await db.table(STORES.CAJAS).put(caja);
+
+                // 5. Crear el movimiento financiero justificado
+                const movimiento = {
+                    id: `mov-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`, // Agrega entropía real
+                    caja_id: caja.id,
+                    tipo: 'salida',
+                    monto: parseFloat(paymentInfo.monto),
+                    concepto: paymentInfo.concepto,
+                    fecha: new Date().toISOString()
+                };
+                await db.table(STORES.MOVIMIENTOS_CAJA).put(movimiento);
+
+                // 6. Guardar el lote y sincronizar el producto
+                await productsRepository.saveBatchAndSyncProduct(batchData);
+
+                return { success: true, movimiento };
+            }
+        );
+    });
+};
+
+export const executeProductionBatchSafe = (batchData, recipe) =>
+    safeExecute(() => productsRepository.saveProductionBatchAndSync(batchData, recipe));
 // ============================================================
 // ALIAS DIRECTOS (Lecturas y Búsquedas)
 // ============================================================

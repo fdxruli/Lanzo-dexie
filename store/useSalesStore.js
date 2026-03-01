@@ -2,14 +2,11 @@
 import { create } from 'zustand';
 import {
   loadData,
-  saveDataSafe,
-  deleteDataSafe,
   loadDataPaginated,
-  STORES,
-  recycleData
+  STORES
 } from '../services/database';
-import { useStatsStore } from './useStatsStore';
 import Logger from '../services/Logger';
+import { cancelSale } from '../services/salesService';
 
 export const useSalesStore = create((set, get) => ({
   sales: [],
@@ -31,57 +28,34 @@ export const useSalesStore = create((set, get) => ({
     }
   },
 
-  deleteSale: async (timestamp) => {
-    
-    // 1. Confirmación honesta (Auditoría)
-    const confirmMessage = '¿Mover esta venta a la Papelera?\n\nNOTA: Esto solo la elimina del historial visible. NO devuelve los productos al inventario.';
-    if (!window.confirm(confirmMessage)) return;
-
+  deleteSale: async (timestamp, { restoreStock = false } = {}) => {
+    const normalizedRestoreStock = Boolean(restoreStock);
     set({ isLoading: true });
 
     try {
-      // 2. BUSCAR LA VENTA PRIMERO
-      // Necesitamos el objeto completo para obtener su 'id' real (Key de la BD)
-      // y también para asegurarnos de que existe antes de intentar moverla.
       const currentSales = get().sales;
-      const saleFound = currentSales.find(s => s.timestamp === timestamp);
-
-      if (!saleFound) {
-        alert("⚠️ No se encontró la venta. Intenta recargar la página.");
-        set({ isLoading: false });
-        return;
-      }
-
-      // 3. RECICLAR USANDO EL ID
-      // Aunque la UI usa timestamp, la base de datos usa 'id'.
-      // Usamos saleFound.id para asegurar que le pegamos al registro correcto.
-      const result = await recycleData(
-        STORES.SALES,          // Origen
-        STORES.DELETED_SALES,  // Destino
-        saleFound.id,          // <--- AQUI ESTÁ LA CLAVE: Usamos el ID real
-        "Eliminado manualmente desde Historial" 
-      );
+      const result = await cancelSale({
+        timestamp,
+        restoreStock: normalizedRestoreStock,
+        currentSales
+      });
 
       if (result.success) {
-        // 4. ACTUALIZAR UI
-        // Filtramos usando timestamp porque es lo que tenemos a mano y es único
-        const updatedSales = currentSales.filter(s => s.timestamp !== timestamp);
-        
-        set({ 
-          sales: updatedSales,
-          isLoading: false 
-        });
-
-        alert("✅ Venta movida a la papelera (Auditoría).");
-      } else {
-        console.warn("Fallo reciclaje:", result);
-        alert("No se pudo mover a la papelera. Revisa la consola.");
-        set({ isLoading: false });
+        const updatedSales = currentSales.filter((sale) => sale.timestamp !== timestamp);
+        set({ sales: updatedSales });
       }
 
+      return result;
     } catch (error) {
-      Logger.error("Error crítico al eliminar venta:", error);
-      alert("Ocurrió un error inesperado.");
+      Logger.error('Error inesperado al cancelar venta:', error);
+      return {
+        success: false,
+        code: 'ERROR',
+        restoreStock: normalizedRestoreStock,
+        warnings: [],
+        message: error?.message || 'Error inesperado al cancelar la venta.'
+      };
+    } finally {
       set({ isLoading: false });
     }
   }
