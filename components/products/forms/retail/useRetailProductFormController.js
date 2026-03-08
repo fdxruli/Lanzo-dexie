@@ -208,11 +208,15 @@ export function useRetailProductFormController({
         commonData.trackStock = true;
       }
 
-      const initialDbStock = (isApparel && hasActiveVariants) ? 0 : commonData.stock;
+      const initialDbStock = (isApparel && hasActiveVariants)
+        ? 0
+        : (productToEdit ? (Number.parseFloat(productToEdit.stock) || 0) : 0);
+
       const payload = {
+        ...(productToEdit || {}), // PRESERVA LA DATA ORIGINAL: Evita que Dexie borre campos del CSV no manejados en el form
         id: productId,
         ...commonData,
-        stock: initialDbStock,
+        stock: initialDbStock, // RESPETA EL STOCK PREVIO: Impide que se reinicie a 0/undefined
         rubroContext: activeRubroContext,
         saleType,
         unit,
@@ -229,7 +233,7 @@ export function useRetailProductFormController({
         }),
         bulkData: { purchase: { unit } },
         productType: 'sellable',
-        ...(productToEdit ? {} : { createdAt: new Date().toISOString() })
+        ...(productToEdit ? { updatedAt: new Date().toISOString() } : { createdAt: new Date().toISOString() })
       };
 
       const success = await onSave(payload, productToEdit || { id: productId, isNew: true });

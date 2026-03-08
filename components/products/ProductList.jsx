@@ -32,11 +32,10 @@ export default function ProductList({ products, categories, isLoading, onEdit, o
   const features = useFeatureConfig();
 
   // Acciones del Store
-  const searchProducts = useProductStore((state) => state.searchProducts);
-  const loadInitialProducts = useProductStore((state) => state.loadInitialProducts);
+  const setFilters = useProductStore((state) => state.setFilters);
+  const fetchPage = useProductStore((state) => state.fetchPage);
   const refreshData = useProductStore((state) => state.loadInitialProducts);
-  const loadMoreProducts = useProductStore((state) => state.loadMoreProducts);
-  const hasMoreProducts = useProductStore((state) => state.hasMoreProducts);
+  const hasMore = useProductStore((state) => state.hasMore);
   const isGlobalLoading = useProductStore((state) => state.isLoading);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -49,23 +48,11 @@ export default function ProductList({ products, categories, isLoading, onEdit, o
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (searchTerm.trim().length >= 2) {
-        searchProducts(searchTerm);
-      } else if (searchTerm.trim().length === 0) {
-        loadInitialProducts();
-      }
+      // Delegamos el término a Dexie. El store purgará la paginación automáticamente.
+      setFilters({ searchTerm: searchTerm.trim() });
     }, 600);
     return () => clearTimeout(timer);
   }, [searchTerm]);
-
-  const filteredProducts = useMemo(() => {
-    return products.filter(item =>
-      item.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      item.barcode?.includes(searchTerm) ||
-      (item.sustancia && item.sustancia.toLowerCase().includes(searchTerm.toLowerCase()))
-    );
-  }, [products, searchTerm]);
 
   const handleOpenWaste = (product) => {
     setProductForWaste(product);
@@ -102,7 +89,7 @@ export default function ProductList({ products, categories, isLoading, onEdit, o
       <div className="list-header">
         <div className="title-group">
           <h3 className="subtitle">Inventario</h3>
-          <span className="product-count">{filteredProducts.length} items mostrados</span>
+          <span className="product-count">{products.length} items mostrados</span>
         </div>
 
         <div className="search-box">
@@ -116,7 +103,7 @@ export default function ProductList({ products, categories, isLoading, onEdit, o
         </div>
       </div>
 
-      {filteredProducts.length === 0 ? (
+      {products.length === 0 ? (
         <div className="empty-state">
           <div className="empty-icon"><Icons.Empty /></div>
           <h3>No se encontraron productos</h3>
@@ -124,7 +111,7 @@ export default function ProductList({ products, categories, isLoading, onEdit, o
         </div>
       ) : (
         <div className="product-grid">
-          {filteredProducts.map(item => {
+          {products.map(item => {
             const categoryName = categoryMap.get(item.categoryId) || 'General';
             const isActive = item.isActive !== false;
 
@@ -298,9 +285,9 @@ export default function ProductList({ products, categories, isLoading, onEdit, o
         </div>
       )}
 
-      {!searchTerm && hasMoreProducts && (
+      {hasMore && (
         <div className="pagination-container">
-          <button className="btn-load-more" onClick={() => loadMoreProducts()} disabled={isGlobalLoading}>
+          <button className="btn-load-more" onClick={() => fetchPage('next')} disabled={isGlobalLoading}>
             {isGlobalLoading ? 'Cargando...' : 'Cargar más productos'}
           </button>
         </div>

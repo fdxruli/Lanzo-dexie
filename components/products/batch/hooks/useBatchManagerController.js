@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useInventoryMovement } from '../../../../hooks/useInventoryMovement';
 import { useProductStore } from '../../../../store/useProductStore';
-import { saveBatchAndSyncProductSafe, saveDataSafe, STORES } from '../../../../services/database';
-import { executeBatchWithPaymentSafe } from '../../../../services/database';
+import { saveBatchAndSyncProductSafe, saveDataSafe, executeBatchWithPaymentSafe, executeProductionBatchSafe, STORES } from '../../../../services/database';
 import { showMessageModal } from '../../../../services/utils';
 import { loadBatchesForManager } from '../../../../services/inventoryMovement';
 import { useStatsStore } from '../../../../store/useStatsStore';
@@ -168,7 +167,7 @@ export function useBatchManagerController({
     setIsModalOpen(true);
   }, []);
 
-  const handleSaveBatch = useCallback(async (batchData, paymentInfo = null) => {
+  const handleSaveBatch = useCallback(async (batchData, paymentInfo = null, isEditing = false) => {
     if (!selectedProduct || !selectedProductId) return false;
 
     try {
