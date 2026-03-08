@@ -6,15 +6,26 @@ import {
   uploadFile
 } from '../../services/supabase';
 
+let _profileLoadGeneration = 0;
+
 export const createProfileSlice = (set, get) => ({
   companyProfile: null,
 
   _loadProfile: async (licenseKey) => {
+    // 1. Tomamos el número de esta generación antes de cualquier await
+    const generation = ++_profileLoadGeneration;
+
     let companyData = null;
 
     if (licenseKey && navigator.onLine) {
       try {
         const profileResult = await getBusinessProfile(licenseKey);
+
+        // 2. Después de cada await, verificamos si seguimos siendo la llamada más reciente
+        if (generation !== _profileLoadGeneration) {
+          Logger.log(`[Profile] Carga #${generation} descartada (superada por #${_profileLoadGeneration})`);
+          return;
+        }
 
         if (profileResult.success && profileResult.data) {
           companyData = {
@@ -26,6 +37,12 @@ export const createProfileSlice = (set, get) => ({
             business_type: profileResult.data.business_type
           };
           await saveData(STORES.COMPANY, companyData);
+
+          // 3. Verificamos de nuevo tras el segundo await
+          if (generation !== _profileLoadGeneration) {
+            Logger.log(`[Profile] Carga #${generation} descartada tras guardar local`);
+            return;
+          }
         }
       } catch (e) {
         Logger.warn('[AppStore] Fallo carga perfil online:', e);
@@ -35,11 +52,18 @@ export const createProfileSlice = (set, get) => ({
     if (!companyData) {
       try {
         companyData = await loadData(STORES.COMPANY, 'company');
+
+        // 4. Verificamos tras cargar de IndexedDB también
+        if (generation !== _profileLoadGeneration) {
+          Logger.log(`[Profile] Carga #${generation} descartada tras leer IndexedDB`);
+          return;
+        }
       } catch (e) {
         Logger.warn('[AppStore] Fallo carga perfil local:', e);
       }
     }
 
+    // 5. Solo llegamos aquí si somos la llamada más reciente — escribimos al store
     set({ companyProfile: companyData });
 
     if (companyData && (companyData.name || companyData.business_name)) {
