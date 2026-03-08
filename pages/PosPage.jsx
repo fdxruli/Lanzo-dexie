@@ -17,7 +17,6 @@ import { layawayRepo } from '../services/db';
 import { useProductStore } from '../store/useProductStore';
 import { useInventoryMovement } from '../hooks/useInventoryMovement';
 
-import { loadData, STORES } from '../services/database';
 import { showMessageModal } from '../services/utils';
 import { useAppStore } from '../store/useAppStore';
 import { useDebounce } from '../hooks/useDebounce';
@@ -56,7 +55,6 @@ export default function PosPage() {
   const [isScannerOpen, setIsScannerOpen] = useState(false);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isQuickCajaOpen, setIsQuickCajaOpen] = useState(false);
-  const [categories, setCategories] = useState([]);
   const [selectedCategoryId, setSelectedCategoryId] = useState(null);
 
   const [searchTerm, setSearchTerm] = useState('');
@@ -177,13 +175,11 @@ export default function PosPage() {
     }
   }, [isMobileOrderOpen]);
 
-  // --- CAMBIO: Usamos useProductStore para buscar ---
-  const searchProducts = useProductStore((state) => state.searchProducts);
+  const setFilters = useProductStore((state) => state.setFilters);
 
-  // Ejecutar búsqueda en base de datos cuando el término "debounced" cambie
   useEffect(() => {
-    searchProducts(debouncedSearchTerm);
-  }, [debouncedSearchTerm]);
+    setFilters({ searchTerm: debouncedSearchTerm });
+  }, [debouncedSearchTerm, setFilters]);
 
   const { cajaActual, abrirCaja } = useCaja();
   const { order, customer, clearOrder, getTotalPrice } = useOrderStore();
@@ -191,6 +187,7 @@ export default function PosPage() {
 
   const allProducts = useProductStore((state) => state.menu);
   const refreshData = useProductStore((state) => state.loadInitialProducts);
+  const categories = useProductStore((state) => state.categories);
 
   const total = getTotalPrice();
   const totalItemsCount = order.reduce((acc, item) => acc + (item.saleType === 'bulk' ? 1 : item.quantity), 0);
@@ -204,16 +201,16 @@ export default function PosPage() {
   useEffect(() => {
     const loadExtras = async () => {
       try {
-        const categoryData = await loadData(STORES.CATEGORIES);
-        setCategories(categoryData || []);
-        // Cargamos los productos iniciales
+        // Solo manda llamar a la función del store. 
+        // Esta función ya se encarga de poblar 'menu' y 'categories' de forma segura y ordenada.
         await refreshData();
       } catch (error) {
         Logger.error("Error cargando datos:", error);
       }
     };
     loadExtras();
-  }, []); // Dependencias vacías para cargar solo al montar
+  }, []);
+
   const handleInitiateCheckout = () => {
     const licenseDetails = useAppStore.getState().licenseDetails;
     if (!licenseDetails || !licenseDetails.valid) {

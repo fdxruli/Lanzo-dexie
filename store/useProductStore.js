@@ -1,57 +1,88 @@
 import { create } from 'zustand';
 import {
-  deleteCategoryCascading,
-  loadData,
-  loadDataPaginated,
   recycleData,
-  saveDataSafe,
-  searchProductByBarcode,
-  searchProductsInDB,
-  searchProductBySKU,
+  loadDataPaginated,
   STORES
 } from '../services/database';
 import Logger from '../services/Logger';
+import { categoriesRepository } from '../services/db/general';
 
 export const useProductStore = create((set, get) => ({
   menu: [],
-  rawProducts: [],
   categories: [],
   isLoading: false,
 
-  menuPage: 0,
-  menuPageSize: 50,
-  hasMoreProducts: true,
+  // --- MOTOR DE CURSORES ---
+  cursorStack: [null],
+  currentPageIndex: 0,
+  hasMore: true,
+  filters: {
+    searchTerm: '',
+    categoryId: null
+  },
 
-  searchProducts: async (query) => {
-    if (!query || query.trim().length < 2) {
-      get().loadInitialProducts();
-      return;
+  setFilters: (newFilters) => {
+    set((state) => ({
+      filters: { ...state.filters, ...newFilters },
+      cursorStack: [null], // Purgar historial al filtrar
+      currentPageIndex: 0,
+      menu: [],
+      hasMore: true
+    }));
+    get().fetchPage('current');
+  },
+
+  fetchPage: async (direction = 'current') => {
+    const state = get();
+    if (state.isLoading) return;
+
+    let targetPageIndex = state.currentPageIndex;
+
+    if (direction === 'next' && state.hasMore) {
+      targetPageIndex += 1;
+    } else if (direction === 'prev') {
+      targetPageIndex = Math.max(0, state.currentPageIndex - 1);
     }
 
+    const targetCursor = state.cursorStack[targetPageIndex];
     set({ isLoading: true });
-    try {
-      let results = [];
-      const byCode = await searchProductByBarcode(query);
 
-      if (byCode) {
-        results = [byCode];
-      } else {
-        const bySKU = await searchProductBySKU(query);
-        if (bySKU) {
-          results = [bySKU];
-        } else {
-          results = await searchProductsInDB(query);
-        }
+    try {
+      // Llamada pura a la BD usando cursores
+      const { data, nextCursor } = await loadDataPaginated(STORES.MENU, {
+        limit: 50,
+        cursor: targetCursor,
+        searchTerm: state.filters.searchTerm,
+        categoryId: state.filters.categoryId
+      });
+
+      const newCursorStack = [...state.cursorStack];
+      if (nextCursor) {
+        newCursorStack[targetPageIndex + 1] = nextCursor;
       }
 
       set({
-        menu: results,
-        rawProducts: results,
-        isLoading: false,
-        hasMoreProducts: false
+        menu: data,
+        cursorStack: newCursorStack,
+        currentPageIndex: targetPageIndex,
+        hasMore: !!nextCursor,
+        isLoading: false
       });
     } catch (error) {
-      Logger.error('Error en busqueda:', error);
+      Logger.error('Error en fetchPage:', error);
+      set({ isLoading: false });
+    }
+  },
+
+  loadInitialProducts: async () => {
+    set({ isLoading: true });
+    try {
+      const categories = await categoriesRepository.getActiveCategories();
+      set({ categories: categories || [], isLoading: false });
+      // Delegamos la carga de productos al motor de paginación
+      get().fetchPage('current');
+    } catch (error) {
+      Logger.error('Error loading initial data:', error);
       set({ isLoading: false });
     }
   },
@@ -69,12 +100,16 @@ export const useProductStore = create((set, get) => ({
       );
 
       if (result.success) {
-        const newMenu = get().menu.filter((product) => product.id !== productId);
-        set({
-          menu: newMenu,
-          rawProducts: newMenu,
+        set((state) => ({
+          menu: state.menu.filter((product) => product.id !== productId),
           isLoading: false
-        });
+        }));
+
+        // Caso límite: Retroceder si vaciamos la página actual
+        const { menu, currentPageIndex } = get();
+        if (menu.length === 0 && currentPageIndex > 0) {
+          get().fetchPage('prev');
+        }
       } else {
         alert(`Error al eliminar: ${result.message || 'No encontrado'}`);
         set({ isLoading: false });
@@ -85,101 +120,35 @@ export const useProductStore = create((set, get) => ({
     }
   },
 
+  refreshCategories: async () => {
+    const categories = await categoriesRepository.getActiveCategories();
+    set({ categories: categories || [] });
+  },
+
   deleteCategory: async (categoryId) => {
-    if (!window.confirm("¿Eliminar categoria? Los productos dentro quedaran 'Sin Categoria'.")) {
-      return;
-    }
+    if (!window.confirm("¿Seguro que deseas eliminar esta categoría?")) return;
 
     set({ isLoading: true });
     try {
-      const categories = get().categories;
-      const categoryToDelete = categories.find((category) => category.id === categoryId);
-
-      // Ejecutar primero la eliminación real
-      const result = await deleteCategoryCascading(categoryId);
+      const result = await categoriesRepository.softDeleteCategory(categoryId);
 
       if (result.success) {
-        // Solo si tuvo éxito, creamos el registro en la papelera
-        if (categoryToDelete) {
-          await saveDataSafe(STORES.DELETED_CATEGORIES, {
-            ...categoryToDelete,
-            deletedTimestamp: new Date().toISOString(),
-            deletedReason: 'Categoria eliminada y desvinculada'
-          });
-        }
-
-        set({
-          categories: categories.filter((category) => category.id !== categoryId),
+        set((state) => ({
+          categories: state.categories.filter((cat) => cat.id !== categoryId),
           isLoading: false
-        });
-        get().loadInitialProducts();
+        }));
+
+        // Caso límite: Purgar filtro si la categoría eliminada estaba activa
+        if (get().filters.categoryId === categoryId) {
+          get().setFilters({ categoryId: null });
+        }
       } else {
-        // Bloquear el fallo silencioso
-        alert(`No se pudo eliminar la categoría: ${result.message || 'Error desconocido'}`);
+        alert(result.message);
         set({ isLoading: false });
       }
     } catch (error) {
-      Logger.error('Error eliminando categoria:', error);
-      alert('Error crítico al intentar eliminar la categoría.');
+      Logger.error('Error eliminando categoría:', error);
       set({ isLoading: false });
     }
   },
-
-  loadInitialProducts: async () => {
-    set({ isLoading: true });
-    try {
-      const [productsPage, categories] = await Promise.all([
-        loadDataPaginated(STORES.MENU, { limit: 50, offset: 0 }),
-        loadDataPaginated(STORES.CATEGORIES)
-      ]);
-
-      set({
-        menu: productsPage,
-        rawProducts: productsPage,
-        categories: categories || [],
-        menuPage: 1,
-        hasMoreProducts: productsPage.length === 50,
-        isLoading: false
-      });
-    } catch (error) {
-      Logger.error('Error loading products:', error);
-      set({ isLoading: false });
-    }
-  },
-
-  loadMoreProducts: async () => {
-    const { menuPage, menuPageSize, hasMoreProducts, menu } = get();
-    if (!hasMoreProducts) return;
-
-    try {
-      const nextPage = await loadDataPaginated(STORES.MENU, {
-        limit: menuPageSize,
-        offset: menuPage * menuPageSize
-      });
-
-      if (nextPage.length === 0) {
-        set({ hasMoreProducts: false });
-        return;
-      }
-
-      const currentIds = new Set(menu.map((product) => product.id));
-      const uniqueNextPage = nextPage.filter((product) => !currentIds.has(product.id));
-      const newFullList = [...menu, ...uniqueNextPage];
-
-      set({
-        menu: newFullList,
-        rawProducts: newFullList,
-        menuPage: menuPage + 1,
-        hasMoreProducts: nextPage.length === menuPageSize
-      });
-    } catch (error) {
-      Logger.error('Error paginando:', error);
-    }
-  },
-
-  refreshCategories: async () => {
-    const categories = await loadData(STORES.CATEGORIES);
-    set({ categories: categories || [] });
-  }
 }));
-

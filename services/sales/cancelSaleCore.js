@@ -1,3 +1,5 @@
+import { normalizeStock } from '../db/utils';
+
 const toFiniteNumber = (value, fallback = 0) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : fallback;
@@ -43,10 +45,11 @@ const restoreInventoryBestEffort = async ({ sale, deps, warnings }) => {
           }
 
           const restoredQuantity = toFiniteNumber(batchUsage.quantity);
+          const newStock = normalizeStock(toFiniteNumber(batch.stock) + restoredQuantity);
           const updatedBatch = {
             ...batch,
-            stock: toFiniteNumber(batch.stock) + restoredQuantity,
-            isActive: (toFiniteNumber(batch.stock) + restoredQuantity) > 0,
+            stock: newStock,
+            isActive: newStock > 0,
             updatedAt: new Date().toISOString()
           };
 
@@ -97,7 +100,7 @@ const restoreInventoryBestEffort = async ({ sale, deps, warnings }) => {
       const quantityToRestore = toFiniteNumber(item.stockDeducted ?? item.quantity);
       const updatedProduct = {
         ...parentProduct,
-        stock: toFiniteNumber(parentProduct.stock) + quantityToRestore,
+        stock: normalizeStock(toFiniteNumber(parentProduct.stock) + quantityToRestore),
         updatedAt: new Date().toISOString()
       };
 
@@ -169,86 +172,140 @@ const restoreInventoryBestEffort = async ({ sale, deps, warnings }) => {
 };
 
 export const cancelSaleCore = async (
-  {
-    saleTimestamp,
-    restoreStock = false,
-    currentSales = []
-  },
+  { saleTimestamp, restoreStock = false, currentSales = [] },
   deps
 ) => {
+  const { db, STORES } = deps;
   const normalizedRestoreStock = Boolean(restoreStock);
-  const warnings = [];
-  const {
-    loadData,
-    recycleData,
-    STORES,
-    Logger
-  } = deps;
 
   try {
-    let saleFound = Array.isArray(currentSales)
-      ? currentSales.find((sale) => sale?.timestamp === saleTimestamp)
-      : null;
+    await db.transaction(
+      'rw',
+      [STORES.SALES, STORES.DELETED_SALES, STORES.PRODUCT_BATCHES, STORES.MENU],
+      async () => {
+        // 1. Localizar la venta dentro del contexto de la transacción
+        let saleFound = currentSales.find((sale) => sale?.timestamp === saleTimestamp);
+        if (!saleFound) {
+          const sales = await db.table(STORES.SALES).where('timestamp').equals(saleTimestamp).toArray();
+          saleFound = sales[0];
+        }
 
-    if (!saleFound) {
-      const persistedSales = await loadData(STORES.SALES);
-      saleFound = (persistedSales || []).find((sale) => sale?.timestamp === saleTimestamp);
-    }
+        if (!saleFound) {
+          throw new Error(`NOT_FOUND: Venta con timestamp ${saleTimestamp} no encontrada.`);
+        }
 
-    if (!saleFound) {
-      return makeResult({
-        success: false,
-        code: 'NOT_FOUND',
-        restoreStock: normalizedRestoreStock,
-        warnings,
-        message: 'No se encontro la venta solicitada.'
-      });
-    }
+        // 2. Lógica de Restauración Estricta (Todo o Nada)
+        if (normalizedRestoreStock && saleFound.items?.length > 0) {
+          const batchIdsToFetch = new Set();
+          const productIdsToFetch = new Set();
 
-    if (normalizedRestoreStock) {
-      await restoreInventoryBestEffort({ sale: saleFound, deps, warnings });
-    }
+          // Recopilar IDs para lectura en bloque (Optimización)
+          saleFound.items.forEach(item => {
+            const hasBatches = Array.isArray(item?.batchesUsed) && item.batchesUsed.length > 0;
+            if (hasBatches) {
+              item.batchesUsed.forEach(b => batchIdsToFetch.add(b.batchId));
+            } else {
+              productIdsToFetch.add(item.parentId || item.id);
+            }
+          });
 
-    const saleKey = saleFound.id || saleFound.timestamp;
-    const auditReason = normalizedRestoreStock
-      ? 'Eliminado manualmente - Inventario Devuelto'
-      : 'Eliminado manualmente - Inventario NO Devuelto (Merma)';
+          // Lectura optimizada dentro de la transacción
+          const batchesArray = await db.table(STORES.PRODUCT_BATCHES).bulkGet([...batchIdsToFetch]);
+          const productsArray = await db.table(STORES.MENU).bulkGet([...productIdsToFetch]);
 
-    const recycleResult = await recycleData(
-      STORES.SALES,
-      STORES.DELETED_SALES,
-      saleKey,
-      auditReason
+          const batchesMap = new Map(batchesArray.filter(Boolean).map(b => [b.id, b]));
+          const productsMap = new Map(productsArray.filter(Boolean).map(p => [p.id, p]));
+
+          const affectedParentIds = new Set();
+          const batchUpdates = [];
+          const productUpdates = [];
+
+          // Procesar actualizaciones en memoria
+          for (const item of saleFound.items) {
+            const hasBatches = Array.isArray(item?.batchesUsed) && item.batchesUsed.length > 0;
+
+            if (hasBatches) {
+              for (const batchUsage of item.batchesUsed) {
+                const batch = batchesMap.get(batchUsage.batchId);
+                if (!batch) throw new Error(`CRITICAL_MISSING_DATA: Lote ${batchUsage.batchId} requerido para restaurar stock no existe.`);
+
+                const restoredQty = Number(batchUsage.quantity) || 0;
+                const newStock = normalizeStock(Number(batch.stock) + restoredQty);
+
+                batchUpdates.push({
+                  key: batch.id,
+                  changes: { stock: newStock, isActive: newStock > 0, updatedAt: new Date().toISOString() }
+                });
+
+                affectedParentIds.add(batchUsage.ingredientId || batch.productId);
+              }
+            } else {
+              const productId = item.parentId || item.id;
+              const product = productsMap.get(productId);
+
+              if (!product) throw new Error(`CRITICAL_MISSING_DATA: Producto ${productId} requerido para restaurar stock no existe.`);
+
+              if (product.trackStock !== false) {
+                const restoredQty = Number(item.stockDeducted ?? item.quantity) || 0;
+                productUpdates.push({
+                  key: product.id,
+                  changes: { stock: normalizeStock(Number(product.stock) + restoredQty), updatedAt: new Date().toISOString() }
+                });
+              }
+            }
+          }
+
+          // Aplicar escrituras de lotes y productos simples
+          await Promise.all([
+            ...batchUpdates.map(u => db.table(STORES.PRODUCT_BATCHES).update(u.key, u.changes)),
+            ...productUpdates.map(u => db.table(STORES.MENU).update(u.key, u.changes))
+          ]);
+
+          // Sincronización de stock en productos padre afectados por lotes
+          if (affectedParentIds.size > 0) {
+            for (const parentId of affectedParentIds) {
+              const parentProduct = await db.table(STORES.MENU).get(parentId);
+              if (!parentProduct) throw new Error(`CRITICAL_MISSING_DATA: Producto padre ${parentId} no encontrado para sincronización.`);
+
+              const allBatches = await db.table(STORES.PRODUCT_BATCHES).where('productId').equals(parentId).toArray();
+              const totalStock = normalizeStock(allBatches
+                .filter(b => b?.isActive && normalizeStock(Number(b?.stock)) > 0)
+                .reduce((sum, b) => sum + normalizeStock(Number(b?.stock)), 0));
+
+              await db.table(STORES.MENU).update(parentId, { stock: totalStock, updatedAt: new Date().toISOString() });
+            }
+          }
+        }
+
+        // 3. Traslado a papelera y eliminación de la venta
+        const auditReason = normalizedRestoreStock
+          ? 'Eliminado manualmente - Inventario Devuelto'
+          : 'Eliminado manualmente - Inventario NO Devuelto (Merma)';
+
+        const deletedSaleRecord = {
+          ...saleFound,
+          deletedAt: new Date().toISOString(),
+          auditReason
+        };
+
+        await db.table(STORES.DELETED_SALES).add(deletedSaleRecord);
+        await db.table(STORES.SALES).delete(saleFound.id || saleFound.timestamp);
+      }
     );
 
-    if (!recycleResult?.success) {
-      return makeResult({
-        success: false,
-        code: 'RECYCLE_FAILED',
-        restoreStock: normalizedRestoreStock,
-        warnings,
-        message: recycleResult?.message || 'No se pudo mover la venta a la papelera.'
-      });
-    }
-
-    return makeResult({
+    return {
       success: true,
       code: 'DELETED',
-      restoreStock: normalizedRestoreStock,
-      warnings,
-      message: warnings.length > 0
-        ? 'La venta se cancelo con advertencias durante la restauracion de inventario.'
-        : undefined
-    });
+      restoreStock: normalizedRestoreStock
+    };
+
   } catch (error) {
-    Logger.error('Error inesperado al cancelar venta:', error);
-    return makeResult({
+    return {
       success: false,
-      code: 'ERROR',
+      code: 'TRANSACTION_FAILED',
       restoreStock: normalizedRestoreStock,
-      warnings,
-      message: error?.message || 'Error inesperado al cancelar la venta.'
-    });
+      message: error.message
+    };
   }
 };
 

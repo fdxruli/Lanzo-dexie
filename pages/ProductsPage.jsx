@@ -547,7 +547,7 @@ export default function ProductsPage() {
                 activeTab === 'categories' && (
                     <CategoryManager
                         categories={categories}
-                        onSave={handleSaveCategory}
+                        onRefresh={refreshData}
                         onDelete={handleDeleteCategory}
                     />
                 )
@@ -570,7 +570,11 @@ export default function ProductsPage() {
                 show={showCategoryModal}
                 onClose={() => setShowCategoryModal(false)}
                 categories={categories}
-                onSave={handleSaveCategory}
+                // Usamos refreshData porque es la función que sincroniza 
+                // el store con la base de datos tras un cambio
+                onRefresh={refreshData}
+                // Usamos handleDeleteCategory que ya tiene la lógica de 
+                // borrado en cascada y manejo de errores
                 onDelete={handleDeleteCategory}
             />
 

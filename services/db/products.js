@@ -1,6 +1,7 @@
 import Dexie from 'dexie';
 import { db, STORES } from './dexie';
 import { handleDexieError, validateOrThrow, DatabaseError, DB_ERROR_CODES } from './utils';
+import { generateID } from '../utils';
 import { productSchema } from '../../schemas/productSchema';
 import Logger from '../Logger';
 
@@ -133,7 +134,7 @@ export const productsRepository = {
         };
 
         const startTime = Date.now();
-        const operationId = `deduction-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const operationId = generateID('opd');
 
         // Validación de entrada básica
         if (!Array.isArray(deductions) || deductions.length === 0) {

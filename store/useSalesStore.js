@@ -17,7 +17,7 @@ export const useSalesStore = create((set, get) => ({
     set({ isLoading: true });
     try {
       const [recentSales, wasteData] = await Promise.all([
-        loadDataPaginated(STORES.SALES, { limit: 50, direction: 'prev' }),
+        loadDataPaginated(STORES.SALES, { limit: 50, direction: 'prev', timeIndex: 'timestamp' }),
         loadData(STORES.WASTE)
       ]);
 

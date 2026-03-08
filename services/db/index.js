@@ -5,6 +5,7 @@ import { salesRepository } from './sales';
 import { DatabaseError, DB_ERROR_CODES } from './utils';
 import { fixStockInconsistencies, rebuildDailyStats } from '../maintenance';
 import { layawayRepository } from './layaways';
+import { handleDexieError } from './utils';
 import { create } from 'zustand';
 
 // ============================================================
@@ -149,6 +150,16 @@ export const executeBatchWithPaymentSafe = async (batchData, paymentInfo) => {
     });
 };
 
+export const loadMultipleData = async (storeName, ids) => {
+    try {
+        if (!db.isOpen()) await db.open();
+        return await generalRepository.getMultiple(storeName, ids);
+    } catch (error) {
+        if (error.name === 'DatabaseClosedError') return null;
+        throw error;
+    }
+};
+
 export const executeProductionBatchSafe = (batchData, recipe) =>
     safeExecute(() => productsRepository.saveProductionBatchAndSync(batchData, recipe));
 // ============================================================
@@ -215,16 +226,51 @@ export const recycleData = (sourceStore, trashStore, key, reason) =>
 /**
  * Paginación manual para tablas grandes
  */
-export const loadDataPaginated = async (storeName, { limit = 50, offset = 0, indexName = null, direction = 'next' } = {}) => {
-    let collection = db.table(storeName);
+export const loadDataPaginated = async (storeName, options = {}) => {
+    // timeIndex se exige desde el invocador, con un fallback genérico a 'createdAt'
+    const {
+        limit = 50,
+        cursor = null,
+        searchTerm = '',
+        categoryId = null,
+        timeIndex = 'createdAt'
+    } = options;
 
-    // Si hay ordenamiento por índice
-    if (indexName) {
-        collection = collection.orderBy(indexName);
-        if (direction === 'prev') collection = collection.reverse();
+    try {
+        let query;
+
+        // Se usa estrictamente el timeIndex inyectado para ordenar o paginar
+        if (cursor) {
+            query = db.table(storeName).where(timeIndex).below(cursor).reverse();
+        } else {
+            query = db.table(storeName).orderBy(timeIndex).reverse();
+        }
+
+        // Filtro en memoria
+        query = query.filter(item => {
+            if (item.isActive === false) return false;
+            if (categoryId && item.categoryId !== categoryId) return false;
+
+            if (searchTerm) {
+                const term = searchTerm.toLowerCase().trim();
+                const matchName = item.name_lower && item.name_lower.includes(term);
+                const matchBarcode = item.barcode && item.barcode.includes(term);
+                if (!matchName && !matchBarcode) return false;
+            }
+
+            return true;
+        });
+
+        const data = await query.limit(limit).toArray();
+
+        // El cursor dinámico respeta el índice declarado
+        const nextCursor = data.length === limit ? data[data.length - 1][timeIndex] : null;
+
+        return { data, nextCursor };
+
+    } catch (error) {
+        throw handleDexieError(error, `loadDataPaginated ${storeName}`);
     }
-
-    return await collection.offset(offset).limit(limit).toArray();
 };
 
 /**

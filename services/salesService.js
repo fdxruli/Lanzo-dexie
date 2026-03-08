@@ -7,11 +7,12 @@ import {
     STORES,
     queryBatchesByProductIdAndActive,
     queryByIndex,
-    executeSaleTransactionSafe
+    executeSaleTransactionSafe,
+    loadMultipleData
 } from './database';
 import { useStatsStore } from '../store/useStatsStore';
 import { roundCurrency, sendWhatsAppMessage } from './utils';
-import { calculateCompositePrice } from './pricingLogic';
+import { calculatePricingDetails } from './pricingLogic';
 import Logger from './Logger';
 import { processSaleCore } from './sales/processSaleCore';
 import { sendReceiptWhatsApp as sendReceiptWhatsAppBase } from './sales/receiptWhatsApp';
@@ -36,10 +37,11 @@ const _processSaleInternal = async (params) => {
         queryBatchesByProductIdAndActive,
         queryByIndex,
         executeSaleTransactionSafe,
+        loadMultipleData,
         useStatsStore,
         roundCurrency,
         sendReceiptWhatsApp,
-        calculateCompositePrice,
+        calculatePricingDetails,
         Logger
     });
 };
