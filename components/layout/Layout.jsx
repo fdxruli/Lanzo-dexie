@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Outlet } from 'react-router-dom';
+import { Outlet, useLocation } from 'react-router-dom';
 import Navbar from './Navbar';
 import Ticker from './Ticker';
 import MessageModal from '../common/MessageModal';
@@ -24,6 +24,21 @@ function Layout() {
   const initializeApp = useAppStore(state => state.initializeApp);
 
   const showAssistantBot = useAppStore(state => state.showAssistantBot);
+
+  const location = useLocation();
+
+  useEffect(() => {
+    // Restablece el scroll del documento principal
+    window.scrollTo(0, 0);
+
+    // Si tu CSS hace que el scroll ocurra dentro de un contenedor específico 
+    // en lugar del body, también restablecemos el scroll de ese contenedor:
+    const contentWrapper = document.querySelector('.content-wrapper');
+    const pageContainer = document.querySelector('.page-container');
+
+    if (contentWrapper) contentWrapper.scrollTo(0, 0);
+    if (pageContainer) pageContainer.scrollTo(0, 0);
+  }, [location.pathname]);
 
   useEffect(() => {
     Logger.log("🚀 Inicializando Stores modulares...");
