@@ -13,7 +13,9 @@ import { useAppStore } from '../../store/useAppStore';
 import './Layout.css';
 import Logger from '../../services/Logger';
 import InstallPrompt from '../common/InstallPrompt';
-import AssistantBot from '../common/AssistantBot';
+import { GLOBAL_ALERT } from '../../config/botContext';
+import { lazy, Suspense } from 'react';
+const AssistantBot = lazy(() => import('../common/AssistantBot'));
 
 function Layout() {
   const loadStats = useStatsStore(state => state.loadStats);
@@ -103,7 +105,12 @@ function Layout() {
       <DataSafetyModal />
       <BackupReminder />
       <InstallPrompt />
-      <AssistantBot />
+
+      {(showAssistantBot || (GLOBAL_ALERT && GLOBAL_ALERT.active && !localStorage.getItem(`lanzo_alert_${GLOBAL_ALERT.id}`))) && (
+        <Suspense fallback={null}>
+          <AssistantBot />
+        </Suspense>
+      )}
 
     </div>
   );
