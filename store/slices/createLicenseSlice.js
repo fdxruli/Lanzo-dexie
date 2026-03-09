@@ -34,17 +34,19 @@ export const createLicenseSlice = (set, get) => ({
   licenseStatus: 'active',
   gracePeriodEnds: null,
   licenseDetails: null,
+  // CORRECCIÓN 1: Nombre unificado con 'a' (_isInitializing), eliminando el typo '_isInitilizing'
+  // que existía en el monolito original y que hacía que la guardia anti-doble-ejecución no funcionara.
   _isInitializing: false,
   pendingTermsUpdate: null,
 
   initializeApp: async () => {
     if (get()._isInitializing) {
-      Logger.warn('initializeApp ya esta en ejecucion, saltando...');
+      Logger.warn('initializeApp ya está en ejecución, saltando...');
       return;
     }
 
     set({ _isInitializing: true });
-    Logger.log('[AppStore] Iniciando aplicacion (Modo Instantaneo)...');
+    Logger.log('[AppStore] Iniciando aplicación (Modo Instantáneo)...');
 
     try {
       const localLicense = await getLicenseFromStorage();
@@ -54,11 +56,12 @@ export const createLicenseSlice = (set, get) => ({
         return;
       }
 
-      Logger.log('[AppStore] Carga rapida activada - Usando cache local');
+      Logger.log('[AppStore] Carga rápida activada - Usando caché local');
       await get()._processOfflineMode(localLicense);
       set({ _isInitializing: false });
 
-      const isRecentlyLoaded = sessionStorage.getItem('Lanzo_app_loaded');
+      // CORRECCIÓN 2: Eliminada variable 'isRecentlyLoaded' que era código muerto
+      // (se leía de sessionStorage pero nunca se usaba en ninguna condición).
       const lastCheck = sessionStorage.getItem('Lanzo_last_validation');
       const now = Date.now();
 
@@ -68,19 +71,18 @@ export const createLicenseSlice = (set, get) => ({
       if (shouldValidate) {
         get()._validateInBackground(localLicense.license_key);
       } else {
-        Logger.log('[AppStore] Validacion reciente detectada, omitiendo check.');
+        Logger.log('[AppStore] Validación reciente detectada, omitiendo check.');
       }
     } catch (criticalError) {
-      Logger.error('Error critico inicializando:', criticalError);
+      Logger.error('Error crítico inicializando:', criticalError);
       set({ appStatus: 'unauthenticated', _isInitializing: false });
     }
   },
 
   _validateInBackground: async (licenseKey) => {
     try {
-      Logger.log('[Background] Iniciando validacion silenciosa...');
+      Logger.log('[Background] Iniciando validación silenciosa...');
 
-      const isOnlineStart = await checkInternetConnection();
       const BACKGROUND_TIMEOUT = 8000;
 
       const validationPromise = revalidateLicense(licenseKey);
@@ -91,7 +93,7 @@ export const createLicenseSlice = (set, get) => ({
       const serverValidation = await Promise.race([validationPromise, timeoutPromise]);
 
       if (!serverValidation?.valid && serverValidation?.valid !== false) {
-        Logger.warn('[Background] Respuesta invalida del servidor, ignorando.');
+        Logger.warn('[Background] Respuesta inválida del servidor, ignorando.');
         return;
       }
 
@@ -113,10 +115,10 @@ export const createLicenseSlice = (set, get) => ({
       };
 
       if (criticalChanges.wasRevoked) {
-        Logger.error('[Background] ALERTA CRITICA: Licencia revocada remotamente');
+        Logger.error('[Background] ALERTA CRÍTICA: Licencia revocada remotamente');
 
         showMessageModal(
-          'LICENCIA REVOCADA\n\nTu licencia ha sido desactivada remotamente. La sesion se cerrara por seguridad.',
+          'LICENCIA REVOCADA\n\nTu licencia ha sido desactivada remotamente. La sesión se cerrará por seguridad.',
           async () => {
             await get().logout();
             window.location.reload();
@@ -151,7 +153,7 @@ export const createLicenseSlice = (set, get) => ({
         });
 
         showMessageModal(
-          'Tu licencia ha expirado.\n\nPara continuar usando la aplicacion, renueva tu suscripcion.',
+          'Tu licencia ha expirado.\n\nPara continuar usando la aplicación, renueva tu suscripción.',
           null,
           { type: 'warning' }
         );
@@ -177,18 +179,18 @@ export const createLicenseSlice = (set, get) => ({
           set({
             serverHealth: 'degraded',
             serverMessage:
-              'Nuestros servidores estan respondiendo mas lento de lo normal. Tu licencia sigue activa en modo local.'
+              'Nuestros servidores están respondiendo más lento de lo normal. Tu licencia sigue activa en modo local.'
           });
         } else if (
           error.message?.includes('fetch') ||
           error.code === 'PGRST301' ||
           error.code?.startsWith('5')
         ) {
-          Logger.warn('[Salud] Detectada caida en Supabase');
+          Logger.warn('[Salud] Detectada caída en Supabase');
           set({
             serverHealth: 'down',
             serverMessage:
-              'Estamos realizando mantenimiento en la base de datos. Algunas funciones online no estaran disponibles momentaneamente.'
+              'Estamos realizando mantenimiento en la base de datos. Algunas funciones online no estarán disponibles momentáneamente.'
           });
         }
       } else {
@@ -196,11 +198,11 @@ export const createLicenseSlice = (set, get) => ({
       }
 
       if (error.message === 'BACKGROUND_TIMEOUT') {
-        Logger.warn('[Background] Timeout de validacion (8s) - Servidor lento o sin conexion');
+        Logger.warn('[Background] Timeout de validación (8s) - Servidor lento o sin conexión');
       } else if (error.message?.includes('fetch') || error.message?.includes('network')) {
-        Logger.warn('[Background] Error de red durante validacion');
+        Logger.warn('[Background] Error de red durante validación');
       } else {
-        Logger.warn('[Background] Validacion fallo:', error.message);
+        Logger.warn('[Background] Validación falló:', error.message);
       }
 
       sessionStorage.setItem('Lanzo_last_validation', Date.now().toString());
@@ -213,12 +215,12 @@ export const createLicenseSlice = (set, get) => ({
       return { success: false, message: 'No hay licencia para renovar' };
     }
 
-    Logger.log('Solicitando renovacion de licencia...');
+    Logger.log('Solicitando renovación de licencia...');
 
     const result = await renewLicenseService(licenseDetails.license_key);
 
     if (result.success) {
-      Logger.log('Renovacion exitosa. Actualizando estado local...');
+      Logger.log('Renovación exitosa. Actualizando estado local...');
 
       const updatedLicense = {
         ...licenseDetails,
@@ -240,7 +242,7 @@ export const createLicenseSlice = (set, get) => ({
       return { success: true, message: result.message };
     }
 
-    Logger.warn('Fallo la renovacion:', result.message);
+    Logger.warn('Falló la renovación:', result.message);
     return { success: false, message: result.message };
   },
 
@@ -280,7 +282,7 @@ export const createLicenseSlice = (set, get) => ({
       }
 
       Logger.warn(
-        '[AppStore] Validacion fallida (posible error post-update). Manteniendo sesion local.'
+        '[AppStore] Validación fallida (posible error post-update). Manteniendo sesión local.'
       );
       await get()._processOfflineMode(localLicense);
       return;
@@ -290,11 +292,15 @@ export const createLicenseSlice = (set, get) => ({
 
     if (!serverValidation.valid && isWithinGracePeriod) {
       finalStatus = 'grace_period';
-      Logger.log('[AppStore] Licencia en PERIODO DE GRACIA');
+      Logger.log('[AppStore] Licencia en PERÍODO DE GRACIA');
     }
 
-    if (serverValidation.legal_status?.has_update_terms) {
-      Logger.log('Terminos actualizados detectados:', serverValidation.legal_status);
+    // CORRECCIÓN 3: Unificado el nombre del campo a 'has_updated_terms' (con 'd').
+    // En el monolito original, _processServerValidation usaba 'has_update_terms' (sin 'd')
+    // mientras que verifySessionIntegrity usaba 'has_updated_terms' (con 'd').
+    // Uno de los dos siempre fallaba silenciosamente. Se elige 'has_updated_terms' como canónico.
+    if (serverValidation.legal_status?.has_updated_terms) {
+      Logger.log('Términos actualizados detectados:', serverValidation.legal_status);
       set({ pendingTermsUpdate: serverValidation.legal_status });
     } else {
       set({ pendingTermsUpdate: null });
@@ -323,7 +329,7 @@ export const createLicenseSlice = (set, get) => ({
     const now = new Date();
 
     if (!localLicense.localExpiry) {
-      console.log('[AppStore] localExpiry faltante, generando basado en activacion...');
+      console.log('[AppStore] localExpiry faltante, generando basado en activación...');
 
       const baseDate = localLicense.activated_at ? new Date(localLicense.activated_at) : now;
 
@@ -337,8 +343,8 @@ export const createLicenseSlice = (set, get) => ({
     const nowTime = now.getTime();
 
     if (localExpiryTime <= nowTime) {
-      console.warn('[AppStore] Cache local expirado (30 dias sin conexion)');
-      console.warn(`Fecha de expiracion: ${localLicense.localExpiry}`);
+      console.warn('[AppStore] Caché local expirado (30 días sin conexión)');
+      console.warn(`Fecha de expiración: ${localLicense.localExpiry}`);
       console.warn(`Fecha actual: ${now.toISOString()}`);
       clearLicenseFromStorage();
       set({ appStatus: 'unauthenticated' });
@@ -346,7 +352,7 @@ export const createLicenseSlice = (set, get) => ({
     }
 
     const daysRemaining = Math.floor((localExpiryTime - nowTime) / (1000 * 60 * 60 * 24));
-    console.log(`[AppStore] Modo offline valido. Dias restantes: ${daysRemaining}`);
+    console.log(`[AppStore] Modo offline válido. Días restantes: ${daysRemaining}`);
 
     let localStatus = localLicense.status || 'active';
 
@@ -358,7 +364,7 @@ export const createLicenseSlice = (set, get) => ({
     if (expiryDate && expiryDate < nowTime) {
       if (graceDate && graceDate > nowTime) {
         localStatus = 'grace_period';
-        console.log('[AppStore] Licencia en PERIODO DE GRACIA (offline)');
+        console.log('[AppStore] Licencia en PERÍODO DE GRACIA (offline)');
       } else {
         console.warn('[AppStore] Licencia expirada localmente');
         clearLicenseFromStorage();
@@ -382,7 +388,7 @@ export const createLicenseSlice = (set, get) => ({
     const state = get();
 
     if (state._isInitializingSecurity) {
-      Logger.log('[Realtime] Ya hay inicializacion en progreso');
+      Logger.log('[Realtime] Ya hay inicialización en progreso');
       return;
     }
 
@@ -434,6 +440,13 @@ export const createLicenseSlice = (set, get) => ({
               }
             );
           }
+        },
+
+        // CORRECCIÓN 4: Añadido callback onPermanentFailure.
+        // Antes, licenseRealtime.js importaba useAppStore directamente (acoplamiento incorrecto).
+        // Ahora el servicio notifica hacia arriba a través de este callback, sin conocer el store.
+        onPermanentFailure: (message) => {
+          get().reportServerFailure(message);
         }
       });
 
@@ -484,12 +497,12 @@ export const createLicenseSlice = (set, get) => ({
         !result.valid &&
         (errorMsg.includes('limit') || errorMsg.includes('active') || errorMsg.includes('device'))
       ) {
-        Logger.log('Dispositivo ya registrado. Intentando recuperar sesion...');
+        Logger.log('Dispositivo ya registrado. Intentando recuperar sesión...');
 
         const revalidate = await revalidateLicense(licenseKey);
 
         if (revalidate.valid) {
-          Logger.log('Sesion recuperada exitosamente.');
+          Logger.log('Sesión recuperada exitosamente.');
 
           const recoveredData = {
             ...revalidate,
@@ -504,7 +517,7 @@ export const createLicenseSlice = (set, get) => ({
         }
       }
 
-      return { success: false, message: result.message || 'Licencia no valida' };
+      return { success: false, message: result.message || 'Licencia no válida' };
     } catch (error) {
       Logger.error('Error en login:', error);
       return { success: false, message: error.message };
@@ -547,6 +560,9 @@ export const createLicenseSlice = (set, get) => ({
 
     clearLicenseFromStorage();
 
+    // CORRECCIÓN 5: Añadidos serverHealth y serverMessage al reset del logout.
+    // Sin esto, si el usuario cerraba sesión con un banner de error activo,
+    // ese banner quedaba visible en la pantalla de login/bienvenida.
     set({
       appStatus: 'unauthenticated',
       licenseDetails: null,
@@ -555,7 +571,9 @@ export const createLicenseSlice = (set, get) => ({
       gracePeriodEnds: null,
       realtimeSubscription: null,
       _isInitializingSecurity: false,
-      _securityCleanupScheduled: false
+      _securityCleanupScheduled: false,
+      serverHealth: 'ok',
+      serverMessage: null
     });
   },
 
@@ -566,7 +584,7 @@ export const createLicenseSlice = (set, get) => ({
 
     if (navigator.onLine) {
       try {
-        Logger.log('Verificando integridad de sesion con servidor...');
+        Logger.log('Verificando integridad de sesión con servidor...');
 
         const serverCheck = await revalidateLicense(licenseDetails.license_key);
 
@@ -578,8 +596,9 @@ export const createLicenseSlice = (set, get) => ({
         const isWithinGracePeriod = graceEnd && graceEnd > now;
         const isTechnicallyValid = serverCheck.valid || isWithinGracePeriod;
 
+        // Usa 'has_updated_terms' (con 'd') — igual que _processServerValidation (corregido)
         if (serverCheck.legal_status?.has_updated_terms) {
-          Logger.log('Nuevos terminos detectados durante el uso.');
+          Logger.log('Nuevos términos detectados durante el uso.');
           set({ pendingTermsUpdate: serverCheck.legal_status });
         } else {
           set({ pendingTermsUpdate: null });
@@ -587,7 +606,7 @@ export const createLicenseSlice = (set, get) => ({
 
         if (!isTechnicallyValid && serverCheck.reason !== 'offline_grace') {
           if (RENEWAL_REASONS.includes(serverCheck.reason)) {
-            Logger.log('[Integrity] Licencia expirada. Activando pantalla de renovacion.');
+            Logger.log('[Integrity] Licencia expirada. Activando pantalla de renovación.');
 
             const expiredDetails = {
               ...licenseDetails,
@@ -630,7 +649,7 @@ export const createLicenseSlice = (set, get) => ({
           licenseDetails.status !== updatedDetails.status;
 
         if (hasChanges) {
-          Logger.log(`[Integrity] Sesion actualizada. Estado: ${newStatus}`);
+          Logger.log(`[Integrity] Sesión actualizada. Estado: ${newStatus}`);
           set({
             licenseStatus: newStatus,
             gracePeriodEnds: serverCheck.grace_period_ends,
@@ -644,7 +663,7 @@ export const createLicenseSlice = (set, get) => ({
         }
       } catch (error) {
         Logger.warn(
-          'Verificacion de integridad fallo (error red/server), manteniendo sesion:',
+          'Verificación de integridad falló (error red/server), manteniendo sesión:',
           error
         );
       }

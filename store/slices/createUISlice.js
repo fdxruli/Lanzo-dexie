@@ -23,7 +23,7 @@ export const createUISlice = (set, get) => ({
     if (!currentMsg) {
       set({
         serverHealth: 'down',
-        serverMessage: message || 'Conexion interrumpida con el servidor de licencias'
+        serverMessage: message || 'Conexión interrumpida con el servidor de licencias'
       });
     }
   },

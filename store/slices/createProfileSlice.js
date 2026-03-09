@@ -6,6 +6,8 @@ import {
   uploadFile
 } from '../../services/supabase';
 
+// Variable de módulo para controlar race conditions en carga de perfil.
+// Si se disparan dos _loadProfile simultáneos, solo el más reciente escribe al store.
 let _profileLoadGeneration = 0;
 
 export const createProfileSlice = (set, get) => ({
@@ -67,10 +69,10 @@ export const createProfileSlice = (set, get) => ({
     set({ companyProfile: companyData });
 
     if (companyData && (companyData.name || companyData.business_name)) {
-      Logger.log('[AppStore] Aplicacion lista (ready)');
+      Logger.log('[AppStore] Aplicación lista (ready)');
       set({ appStatus: 'ready' });
     } else {
-      Logger.log('[AppStore] Requiere configuracion inicial');
+      Logger.log('[AppStore] Requiere configuración inicial');
       set({ appStatus: 'setup_required' });
     }
   },
